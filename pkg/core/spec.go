@@ -44,6 +44,7 @@ type Tests struct {
 	Ping           []PingTest           `yaml:"ping"`
 	DNS            []DNSTest            `yaml:"dns"`
 	SystemInfo     []SystemInfoTest     `yaml:"systeminfo"`
+	HTTP           []HTTPTest           `yaml:"http"`
 }
 
 // PackageTest represents a package installation test
@@ -150,6 +151,17 @@ type SystemInfoTest struct {
 	Hostname       string `yaml:"hostname,omitempty"`        // short hostname
 	FQDN           string `yaml:"fqdn,omitempty"`            // fully qualified domain name
 	VersionMatch   string `yaml:"version_match,omitempty"`   // "exact" or "prefix" (default: exact)
+}
+
+// HTTPTest represents an HTTP endpoint test
+type HTTPTest struct {
+	Name            string   `yaml:"name"`
+	URL             string   `yaml:"url"`
+	StatusCode      int      `yaml:"status_code,omitempty"`      // expected status code (default: 200)
+	Contains        []string `yaml:"contains,omitempty"`         // strings that must be in response body
+	Method          string   `yaml:"method,omitempty"`           // HTTP method (default: GET)
+	Insecure        bool     `yaml:"insecure,omitempty"`         // skip TLS verification (default: false)
+	FollowRedirects bool     `yaml:"follow_redirects,omitempty"` // follow HTTP redirects (default: false)
 }
 
 // ParseSpec parses a YAML spec file
@@ -367,6 +379,30 @@ func (s *Spec) Validate() error {
 		// Validate version_match value
 		if st.VersionMatch != "exact" && st.VersionMatch != "prefix" {
 			return fmt.Errorf("systeminfo test '%s': version_match must be 'exact' or 'prefix'", st.Name)
+		}
+	}
+
+	// Validate HTTP tests
+	for i := range s.Tests.HTTP {
+		ht := &s.Tests.HTTP[i]
+		if ht.Name == "" {
+			return fmt.Errorf("http test %d: name is required", i)
+		}
+		if ht.URL == "" {
+			return fmt.Errorf("http test '%s': url is required", ht.Name)
+		}
+		// Set default status code to 200
+		if ht.StatusCode == 0 {
+			ht.StatusCode = 200
+		}
+		// Set default method to GET
+		if ht.Method == "" {
+			ht.Method = "GET"
+		}
+		// Validate method
+		validMethods := map[string]bool{"GET": true, "POST": true, "PUT": true, "DELETE": true, "PATCH": true, "HEAD": true, "OPTIONS": true}
+		if !validMethods[ht.Method] {
+			return fmt.Errorf("http test '%s': method must be one of GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS", ht.Name)
 		}
 	}
 

@@ -100,6 +100,11 @@ Validate system properties including OS, architecture, kernel version, and hostn
 
 [View System Info Assertions →](assertions/systeminfo.md)
 
+### HTTP Assertions
+Test HTTP endpoints for availability, status codes, and response content.
+
+[View HTTP Assertions →](assertions/http.md)
+
 ## Requirements
 
 The SSH user must have permissions to execute:
@@ -112,6 +117,7 @@ The SSH user must have permissions to execute:
 - Filesystem commands: `findmnt`, `df` (if using filesystem assertions)
 - Network commands: `ping` (if using ping assertions), `dig` or `getent` (if using DNS assertions)
 - System commands: `uname`, `hostname`, `cat` (if using systeminfo assertions)
+- HTTP commands: `curl` (if using HTTP assertions)
 - Shell: `bash` or compatible
 
 ## Supported Distributions

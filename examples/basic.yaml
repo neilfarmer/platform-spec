@@ -93,3 +93,10 @@ tests:
       kernel_version: "6.8.0"
       hostname: "srv01"
       version_match: prefix
+
+  http:
+    - name: "Grafana UI accessible"
+      # url: http://localhost:3000
+      status_code: 200
+      follow_redirects: true
+      insecure: true

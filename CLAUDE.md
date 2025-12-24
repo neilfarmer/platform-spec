@@ -69,7 +69,7 @@ type Provider interface {
 All infrastructure providers (SSH, AWS, OpenStack) implement this interface. The `Executor` coordinates test execution by calling provider methods.
 
 **2. Spec Definition (pkg/core/spec.go)**
-Defines 12 test types that work across all providers:
+Defines 13 test types that work across all providers:
 - `PackageTest` - Package installation state (dpkg/rpm/apk detection)
 - `FileTest` - File/directory properties (ownership, permissions, type)
 - `ServiceTest` - Service status (running/stopped, enabled/disabled via systemd)
@@ -82,12 +82,13 @@ Defines 12 test types that work across all providers:
 - `PingTest` - Network reachability using ICMP ping
 - `DNSTest` - DNS resolution validation
 - `SystemInfoTest` - System information validation (OS, architecture, kernel, hostname)
+- `HTTPTest` - HTTP endpoint testing (status code, response content validation)
 
-Each test type includes YAML validation with defaults (e.g., `state: present`, `type: file`, `state: running` for docker, `state: mounted` for filesystems, `version_match: exact` for systeminfo).
+Each test type includes YAML validation with defaults (e.g., `state: present`, `type: file`, `state: running` for docker, `state: mounted` for filesystems, `version_match: exact` for systeminfo, `status_code: 200` and `method: GET` for HTTP).
 
 **3. Test Execution Flow (pkg/core/executor.go)**
 The executor runs tests sequentially in this order:
-1. Packages → 2. Files → 3. Services → 4. Users → 5. Groups → 6. File Content → 7. Commands → 8. Docker → 9. Filesystems → 10. Ping → 11. DNS → 12. SystemInfo
+1. Packages → 2. Files → 3. Services → 4. Users → 5. Groups → 6. File Content → 7. Commands → 8. Docker → 9. Filesystems → 10. Ping → 11. DNS → 12. SystemInfo → 13. HTTP
 
 Each test produces a `Result` with `Status` (passed/failed/skipped/error), message, duration, and details map. The `FailFast` config option stops execution on first failure.
 
@@ -98,7 +99,7 @@ Two providers are currently implemented:
 **Local Provider (pkg/providers/local/provider.go)**
 - Executes commands on the local system using `os/exec`
 - Simple implementation with no connection overhead
-- Supports all 12 test types
+- Supports all 13 test types
 - Usage: `platform-spec test local spec.yaml`
 
 **SSH Provider (pkg/providers/ssh/provider.go)**
@@ -153,7 +154,7 @@ pkg/output/           # Output formatters
 1. Create new package under `pkg/providers/<name>/`
 2. Implement `Provider` interface with `ExecuteCommand()`
 3. Add subcommand in `cmd/platform-spec/test.go`
-4. Test against all 12 assertion types in the spec
+4. Test against all 13 assertion types in the spec
 
 ### Remote Command Patterns
 
@@ -170,6 +171,7 @@ The executor uses standard Linux commands via the provider:
 - Ping: `ping -c 1 -W 5` for single ICMP packet with 5 second timeout
 - DNS: `dig +short` or fallback to `getent hosts` for hostname resolution
 - SystemInfo: `/etc/os-release` for OS info, `uname -m` for architecture, `uname -r` for kernel, `hostname -s/-f` for hostname/FQDN
+- HTTP: `curl -s -w "\n%{http_code}"` for HTTP requests with status code extraction, supports `-X METHOD` and `-k` for insecure TLS
 
 All commands include `2>/dev/null` for error suppression and fallback checks.
 

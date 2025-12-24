@@ -297,6 +297,42 @@ tests:
       os: ubuntu`,
 			wantErr: false,
 		},
+		{
+			name: "valid http test",
+			yaml: `version: "1.0"
+tests:
+  http:
+    - name: "test endpoint"
+      url: http://example.com
+      status_code: 200`,
+			wantErr: false,
+		},
+		{
+			name: "http test missing name",
+			yaml: `version: "1.0"
+tests:
+  http:
+    - url: http://example.com`,
+			wantErr: true,
+		},
+		{
+			name: "http test missing url",
+			yaml: `version: "1.0"
+tests:
+  http:
+    - name: "test"`,
+			wantErr: true,
+		},
+		{
+			name: "http test invalid method",
+			yaml: `version: "1.0"
+tests:
+  http:
+    - name: "test"
+      url: http://example.com
+      method: INVALID`,
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -507,6 +543,93 @@ func TestSpecValidation(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "http test missing name",
+			spec: &Spec{
+				Tests: Tests{
+					HTTP: []HTTPTest{
+						{
+							URL: "http://example.com",
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "http test missing url",
+			spec: &Spec{
+				Tests: Tests{
+					HTTP: []HTTPTest{
+						{
+							Name: "test",
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "http test invalid method",
+			spec: &Spec{
+				Tests: Tests{
+					HTTP: []HTTPTest{
+						{
+							Name:   "test",
+							URL:    "http://example.com",
+							Method: "INVALID",
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "http test defaults status_code to 200",
+			spec: &Spec{
+				Tests: Tests{
+					HTTP: []HTTPTest{
+						{
+							Name: "test",
+							URL:  "http://example.com",
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "http test defaults method to GET",
+			spec: &Spec{
+				Tests: Tests{
+					HTTP: []HTTPTest{
+						{
+							Name: "test",
+							URL:  "http://example.com",
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid http test with all fields",
+			spec: &Spec{
+				Tests: Tests{
+					HTTP: []HTTPTest{
+						{
+							Name:       "test",
+							URL:        "https://example.com/api",
+							StatusCode: 201,
+							Contains:   []string{"success", "data"},
+							Method:     "POST",
+							Insecure:   true,
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -544,6 +667,14 @@ func TestSpecValidation(t *testing.T) {
 				for _, st := range tt.spec.Tests.SystemInfo {
 					if st.VersionMatch == "" {
 						t.Error("SystemInfo version_match should default to exact")
+					}
+				}
+				for _, ht := range tt.spec.Tests.HTTP {
+					if ht.StatusCode == 0 {
+						t.Error("HTTP status_code should default to 200")
+					}
+					if ht.Method == "" {
+						t.Error("HTTP method should default to GET")
 					}
 				}
 			}
