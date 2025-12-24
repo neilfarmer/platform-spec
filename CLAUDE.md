@@ -87,12 +87,22 @@ The executor runs tests sequentially in this order:
 
 Each test produces a `Result` with `Status` (passed/failed/skipped/error), message, duration, and details map. The `FailFast` config option stops execution on first failure.
 
-**4. SSH Provider (pkg/providers/ssh/provider.go)**
-Currently the only implemented provider. Key details:
+**4. Providers**
+
+Two providers are currently implemented:
+
+**Local Provider (pkg/providers/local/provider.go)**
+- Executes commands on the local system using `os/exec`
+- Simple implementation with no connection overhead
+- Supports all 8 test types
+- Usage: `platform-spec test local spec.yaml`
+
+**SSH Provider (pkg/providers/ssh/provider.go)**
 - Supports SSH key files (`-i` flag) and SSH Agent (`SSH_AUTH_SOCK` env var)
 - Uses golang.org/x/crypto/ssh for connections
 - `ParseTarget()` helper parses "user@host" format
 - **Security Note**: Currently uses `InsecureIgnoreHostKey()` - marked as TODO for production use
+- Usage: `platform-spec test ssh user@host spec.yaml`
 
 **5. Output Formatters (pkg/output/human.go)**
 Human-readable format with ASCII symbols (✓/✗/○/⚠), duration tracking, and summary counts.

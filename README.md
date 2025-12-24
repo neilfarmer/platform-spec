@@ -42,6 +42,10 @@ tests:
 Run the tests:
 
 ```bash
+# Test local system
+platform-spec test local mytest.yaml
+
+# Test remote system via SSH
 platform-spec test ssh ubuntu@myhost mytest.yaml
 ```
 

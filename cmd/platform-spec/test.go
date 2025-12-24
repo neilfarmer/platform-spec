@@ -8,6 +8,7 @@ import (
 
 	"github.com/neilfarmer/platform-spec/pkg/core"
 	"github.com/neilfarmer/platform-spec/pkg/output"
+	"github.com/neilfarmer/platform-spec/pkg/providers/local"
 	"github.com/neilfarmer/platform-spec/pkg/providers/ssh"
 	"github.com/spf13/cobra"
 )
@@ -35,6 +36,14 @@ var sshCmd = &cobra.Command{
 	Long:  `Connect to a host via SSH and run tests defined in YAML spec files.`,
 	Args:  cobra.MinimumNArgs(2),
 	Run:   runSSHTest,
+}
+
+var localCmd = &cobra.Command{
+	Use:   "local spec.yaml [spec2.yaml...]",
+	Short: "Test local system",
+	Long:  `Run tests against the local system defined in YAML spec files.`,
+	Args:  cobra.MinimumNArgs(1),
+	Run:   runLocalTest,
 }
 
 var awsCmd = &cobra.Command{
@@ -65,8 +74,13 @@ func init() {
 	sshCmd.Flags().StringVarP(&outputFormat, "output", "o", "human", "Output format (human, json, junit)")
 	sshCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Verbose output")
 
+	// Local command flags
+	localCmd.Flags().StringVarP(&outputFormat, "output", "o", "human", "Output format (human, json, junit)")
+	localCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Verbose output")
+
 	// Add subcommands to test
 	testCmd.AddCommand(sshCmd)
+	testCmd.AddCommand(localCmd)
 	testCmd.AddCommand(awsCmd)
 	testCmd.AddCommand(openstackCmd)
 }
@@ -132,6 +146,61 @@ func runSSHTest(cmd *cobra.Command, args []string) {
 		}
 
 		results.Target = fmt.Sprintf("%s@%s", user, host)
+		allResults = append(allResults, results)
+	}
+
+	// Output results
+	for _, results := range allResults {
+		switch outputFormat {
+		case "json":
+			fmt.Println("JSON output not yet implemented")
+		case "junit":
+			fmt.Println("JUnit output not yet implemented")
+		default:
+			fmt.Print(output.FormatHuman(results))
+		}
+	}
+
+	// Exit with error code if any tests failed
+	for _, results := range allResults {
+		if !results.Success() {
+			os.Exit(1)
+		}
+	}
+}
+
+func runLocalTest(cmd *cobra.Command, args []string) {
+	specFiles := args
+
+	if verbose {
+		fmt.Printf("Target: localhost\n")
+		fmt.Printf("Spec files: %v\n", specFiles)
+		fmt.Printf("\n")
+	}
+
+	// Create local provider
+	localProvider := local.NewProvider()
+
+	// Execute tests for each spec file
+	ctx := context.Background()
+	var allResults []*core.TestResults
+	for _, specFile := range specFiles {
+		// Parse spec
+		spec, err := core.ParseSpec(specFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to parse spec %s: %v\n", specFile, err)
+			os.Exit(1)
+		}
+
+		// Execute tests
+		executor := core.NewExecutor(spec, localProvider)
+		results, err := executor.Execute(ctx)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to execute tests: %v\n", err)
+			os.Exit(1)
+		}
+
+		results.Target = "localhost"
 		allResults = append(allResults, results)
 	}
 

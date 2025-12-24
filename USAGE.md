@@ -4,12 +4,28 @@ Complete reference for YAML schema, output formats, and examples.
 
 ## Providers
 
+### Local Provider
+
+Test your local system.
+
+**Quick Example:**
+
+```bash
+platform-spec test local spec.yaml
+```
+
+Runs all tests against the local machine. Supports all 8 assertion types (packages, files, services, users, groups, file_content, command_content, docker).
+
+**Available Assertions:** See [SSH Provider assertions](docs/ssh/README.md) - all work identically for local testing.
+
 ### SSH Provider
+
 Test Linux systems via SSH connection.
 
 **Full Documentation:** [docs/ssh/README.md](docs/ssh/README.md)
 
 **Quick Example:**
+
 ```bash
 platform-spec test ssh ubuntu@host spec.yaml
 ```
@@ -17,10 +33,12 @@ platform-spec test ssh ubuntu@host spec.yaml
 See [SSH Provider docs](docs/ssh/README.md) for authentication, connection options, and all available tests.
 
 ### AWS Provider
-*Planned - not yet implemented*
+
+_Planned - not yet implemented_
 
 ### OpenStack Provider
-*Planned - not yet implemented*
+
+_Planned - not yet implemented_
 
 ## YAML Spec Schema
 
@@ -49,7 +67,7 @@ tests:
   users: [] # User tests
   groups: [] # Group tests
   file_content: [] # File content tests
-  commands: [] # Command output tests
+  command_content: [] # Command output tests
   docker: [] # Docker container tests
 ```
 
@@ -77,9 +95,8 @@ config:
 
 ### Assertion Types
 
-Available assertions depend on the provider:
+The following assertions work for both Local and SSH providers:
 
-**SSH Provider:**
 - [Package Assertions](docs/ssh/assertions/packages.md) - Check if packages are installed/absent
 - [File Assertions](docs/ssh/assertions/files.md) - Validate file/directory properties
 - [Service Assertions](docs/ssh/assertions/services.md) - Check service status and enabled state
@@ -184,4 +201,3 @@ tests:
 - **Version Control**: Store specs alongside infrastructure code
 - **Start Simple**: Begin with package and file checks
 - **Test Often**: Run during development and deployment
-

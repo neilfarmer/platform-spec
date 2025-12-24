@@ -2,6 +2,8 @@
 
 Test Linux systems via SSH connection.
 
+**Note:** The assertion types documented here (packages, files, services, etc.) work for both SSH and Local providers. This page covers SSH-specific connection details.
+
 ## Authentication
 
 The SSH provider supports:
