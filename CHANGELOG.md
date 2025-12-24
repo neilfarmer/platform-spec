@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/neilfarmer/platform-spec/compare/v0.2.0...v0.3.0) (2025-12-24)
+
+
+### Features
+
+* Add port assertions ([bc62dcd](https://github.com/neilfarmer/platform-spec/commit/bc62dcdc13927f965d7948f7d25570a9128e6437))
+
 ## [0.2.0](https://github.com/neilfarmer/platform-spec/compare/v0.1.0...v0.2.0) (2025-12-24)
 
 
