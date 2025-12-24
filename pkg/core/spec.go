@@ -45,6 +45,7 @@ type Tests struct {
 	DNS            []DNSTest            `yaml:"dns"`
 	SystemInfo     []SystemInfoTest     `yaml:"systeminfo"`
 	HTTP           []HTTPTest           `yaml:"http"`
+	Ports          []PortTest           `yaml:"ports"`
 }
 
 // PackageTest represents a package installation test
@@ -162,6 +163,14 @@ type HTTPTest struct {
 	Method          string   `yaml:"method,omitempty"`           // HTTP method (default: GET)
 	Insecure        bool     `yaml:"insecure,omitempty"`         // skip TLS verification (default: false)
 	FollowRedirects bool     `yaml:"follow_redirects,omitempty"` // follow HTTP redirects (default: false)
+}
+
+// PortTest represents a port/socket listening test
+type PortTest struct {
+	Name     string `yaml:"name"`
+	Port     int    `yaml:"port"`
+	Protocol string `yaml:"protocol,omitempty"` // tcp or udp (default: tcp)
+	State    string `yaml:"state,omitempty"`    // listening or closed (default: listening)
 }
 
 // ParseSpec parses a YAML spec file
@@ -403,6 +412,33 @@ func (s *Spec) Validate() error {
 		validMethods := map[string]bool{"GET": true, "POST": true, "PUT": true, "DELETE": true, "PATCH": true, "HEAD": true, "OPTIONS": true}
 		if !validMethods[ht.Method] {
 			return fmt.Errorf("http test '%s': method must be one of GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS", ht.Name)
+		}
+	}
+
+	// Validate port tests
+	for i := range s.Tests.Ports {
+		pt := &s.Tests.Ports[i]
+		if pt.Name == "" {
+			return fmt.Errorf("port test %d: name is required", i)
+		}
+		if pt.Port <= 0 || pt.Port > 65535 {
+			return fmt.Errorf("port test '%s': port must be between 1 and 65535", pt.Name)
+		}
+		// Set default protocol to tcp
+		if pt.Protocol == "" {
+			pt.Protocol = "tcp"
+		}
+		// Validate protocol
+		if pt.Protocol != "tcp" && pt.Protocol != "udp" {
+			return fmt.Errorf("port test '%s': protocol must be 'tcp' or 'udp'", pt.Name)
+		}
+		// Set default state to listening
+		if pt.State == "" {
+			pt.State = "listening"
+		}
+		// Validate state
+		if pt.State != "listening" && pt.State != "closed" {
+			return fmt.Errorf("port test '%s': state must be 'listening' or 'closed'", pt.State)
 		}
 	}
 

@@ -630,6 +630,107 @@ func TestSpecValidation(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "port test missing name",
+			spec: &Spec{
+				Tests: Tests{
+					Ports: []PortTest{
+						{
+							Port: 22,
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "port test invalid port (0)",
+			spec: &Spec{
+				Tests: Tests{
+					Ports: []PortTest{
+						{
+							Name: "test",
+							Port: 0,
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "port test invalid port (too large)",
+			spec: &Spec{
+				Tests: Tests{
+					Ports: []PortTest{
+						{
+							Name: "test",
+							Port: 70000,
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "port test invalid protocol",
+			spec: &Spec{
+				Tests: Tests{
+					Ports: []PortTest{
+						{
+							Name:     "test",
+							Port:     22,
+							Protocol: "sctp",
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "port test invalid state",
+			spec: &Spec{
+				Tests: Tests{
+					Ports: []PortTest{
+						{
+							Name:  "test",
+							Port:  22,
+							State: "open",
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "port test defaults",
+			spec: &Spec{
+				Tests: Tests{
+					Ports: []PortTest{
+						{
+							Name: "test",
+							Port: 22,
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid port test with all fields",
+			spec: &Spec{
+				Tests: Tests{
+					Ports: []PortTest{
+						{
+							Name:     "test",
+							Port:     8080,
+							Protocol: "udp",
+							State:    "closed",
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -675,6 +776,14 @@ func TestSpecValidation(t *testing.T) {
 					}
 					if ht.Method == "" {
 						t.Error("HTTP method should default to GET")
+					}
+				}
+				for _, pt := range tt.spec.Tests.Ports {
+					if pt.Protocol == "" {
+						t.Error("Port protocol should default to tcp")
+					}
+					if pt.State == "" {
+						t.Error("Port state should default to listening")
 					}
 				}
 			}

@@ -105,6 +105,11 @@ Test HTTP endpoints for availability, status codes, and response content.
 
 [View HTTP Assertions →](assertions/http.md)
 
+### Port Assertions
+Check that network ports/sockets are in the expected listening or closed state.
+
+[View Port Assertions →](assertions/ports.md)
+
 ## Requirements
 
 The SSH user must have permissions to execute:
@@ -118,6 +123,7 @@ The SSH user must have permissions to execute:
 - Network commands: `ping` (if using ping assertions), `dig` or `getent` (if using DNS assertions)
 - System commands: `uname`, `hostname`, `cat` (if using systeminfo assertions)
 - HTTP commands: `curl` (if using HTTP assertions)
+- Socket commands: `ss` (if using port assertions)
 - Shell: `bash` or compatible
 
 ## Supported Distributions

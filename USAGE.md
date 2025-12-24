@@ -14,9 +14,9 @@ Test your local system.
 platform-spec test local spec.yaml
 ```
 
-Runs all tests against the local machine. Supports all 13 assertion types.
+Runs all tests against the local machine. Supports all 14 assertion types.
 
-**Available Assertions:** See [SSH Provider assertions](docs/ssh/README.md) - all work identically for local testing (13 assertion types).
+**Available Assertions:** See [SSH Provider assertions](docs/ssh/README.md) - all work identically for local testing (14 assertion types).
 
 ### SSH Provider
 
@@ -74,6 +74,7 @@ tests:
   dns: [] # DNS resolution tests
   systeminfo: [] # System information validation tests
   http: [] # HTTP endpoint tests
+  ports: [] # Port listening tests
 ```
 
 ### Metadata Section
@@ -115,6 +116,7 @@ The following assertions work for both Local and SSH providers:
 - [DNS Assertions](docs/ssh/assertions/dns.md) - Check DNS resolution for hostnames
 - [System Info Assertions](docs/ssh/assertions/systeminfo.md) - Validate system properties (OS, architecture, kernel, hostname)
 - [HTTP Assertions](docs/ssh/assertions/http.md) - Test HTTP endpoints for availability, status codes, and response content
+- [Port Assertions](docs/ssh/assertions/ports.md) - Check that network ports are in the expected listening or closed state
 
 ## Output
 

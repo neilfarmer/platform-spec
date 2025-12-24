@@ -168,6 +168,16 @@ func (e *Executor) Execute(ctx context.Context) (*TestResults, error) {
 		}
 	}
 
+	for _, test := range e.spec.Tests.Ports {
+		result := e.executePortTest(ctx, test)
+		results.Results = append(results.Results, result)
+
+		// Check fail-fast
+		if e.spec.Config.FailFast && result.Status == StatusFail {
+			break
+		}
+	}
+
 	results.Duration = time.Since(startTime)
 	return results, nil
 }
@@ -1271,6 +1281,72 @@ func (e *Executor) executeSystemInfoTest(ctx context.Context, test SystemInfoTes
 		result.Message = strings.Join(failures, "; ")
 	} else {
 		result.Message = "System information matches all specified criteria"
+	}
+
+	result.Duration = time.Since(start)
+	return result
+}
+
+// executePortTest executes a port/socket listening test
+func (e *Executor) executePortTest(ctx context.Context, test PortTest) Result {
+	start := time.Now()
+	result := Result{
+		Name:    test.Name,
+		Status:  StatusPass,
+		Details: make(map[string]interface{}),
+	}
+
+	// Build ss command based on protocol
+	var cmd string
+	if test.Protocol == "tcp" {
+		cmd = fmt.Sprintf("ss -tln | grep -E ':%d\\s' || true", test.Port)
+	} else { // udp
+		cmd = fmt.Sprintf("ss -uln | grep -E ':%d\\s' || true", test.Port)
+	}
+
+	stdout, stderr, exitCode, err := e.provider.ExecuteCommand(ctx, cmd)
+
+	if err != nil {
+		result.Status = StatusError
+		result.Message = fmt.Sprintf("Error checking port: %v", err)
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	// exitCode will be 0 if grep found something (port is listening)
+	// or 0 from '|| true' if grep found nothing (port not listening)
+	_ = exitCode
+
+	// Store details
+	result.Details["port"] = test.Port
+	result.Details["protocol"] = test.Protocol
+	result.Details["expected_state"] = test.State
+
+	// Check if port is listening by parsing ss output
+	isListening := strings.TrimSpace(stdout) != ""
+
+	if test.State == "listening" {
+		if !isListening {
+			result.Status = StatusFail
+			result.Message = fmt.Sprintf("Port %d/%s is not listening", test.Port, test.Protocol)
+		} else {
+			result.Message = fmt.Sprintf("Port %d/%s is listening", test.Port, test.Protocol)
+			result.Details["actual_state"] = "listening"
+		}
+	} else { // state == "closed"
+		if isListening {
+			result.Status = StatusFail
+			result.Message = fmt.Sprintf("Port %d/%s is listening, expected closed", test.Port, test.Protocol)
+			result.Details["actual_state"] = "listening"
+		} else {
+			result.Message = fmt.Sprintf("Port %d/%s is closed", test.Port, test.Protocol)
+			result.Details["actual_state"] = "closed"
+		}
+	}
+
+	// Log stderr if present (for debugging)
+	if stderr != "" && result.Status != StatusFail {
+		result.Details["stderr"] = strings.TrimSpace(stderr)
 	}
 
 	result.Duration = time.Since(start)

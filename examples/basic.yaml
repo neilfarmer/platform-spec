@@ -96,7 +96,21 @@ tests:
 
   http:
     - name: "Grafana UI accessible"
-      # url: http://localhost:3000
+      url: http://localhost:3000
       status_code: 200
       follow_redirects: true
       insecure: true
+
+  ports:
+    - name: "SSH port listening"
+      port: 22
+      protocol: tcp
+      state: listening
+
+    - name: "Grafana port listening"
+      port: 3000
+      protocol: tcp
+
+    - name: "Telnet port closed"
+      port: 23
+      state: closed
