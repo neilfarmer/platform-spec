@@ -210,6 +210,93 @@ tests:
       min_size_gb: -1`,
 			wantErr: true,
 		},
+		{
+			name: "valid ping test",
+			yaml: `version: "1.0"
+tests:
+  ping:
+    - name: "test ping"
+      host: google.com`,
+			wantErr: false,
+		},
+		{
+			name: "ping test missing name",
+			yaml: `version: "1.0"
+tests:
+  ping:
+    - host: google.com`,
+			wantErr: true,
+		},
+		{
+			name: "ping test missing host",
+			yaml: `version: "1.0"
+tests:
+  ping:
+    - name: "test"`,
+			wantErr: true,
+		},
+		{
+			name: "valid dns test",
+			yaml: `version: "1.0"
+tests:
+  dns:
+    - name: "test dns"
+      host: google.com`,
+			wantErr: false,
+		},
+		{
+			name: "dns test missing name",
+			yaml: `version: "1.0"
+tests:
+  dns:
+    - host: google.com`,
+			wantErr: true,
+		},
+		{
+			name: "dns test missing host",
+			yaml: `version: "1.0"
+tests:
+  dns:
+    - name: "test"`,
+			wantErr: true,
+		},
+		{
+			name: "valid systeminfo test",
+			yaml: `version: "1.0"
+tests:
+  systeminfo:
+    - name: "test sysinfo"
+      os: ubuntu
+      os_version: "22.04"`,
+			wantErr: false,
+		},
+		{
+			name: "systeminfo test missing name",
+			yaml: `version: "1.0"
+tests:
+  systeminfo:
+    - os: ubuntu`,
+			wantErr: true,
+		},
+		{
+			name: "systeminfo test invalid version_match",
+			yaml: `version: "1.0"
+tests:
+  systeminfo:
+    - name: "test"
+      os: ubuntu
+      version_match: invalid`,
+			wantErr: true,
+		},
+		{
+			name: "systeminfo test defaults to exact",
+			yaml: `version: "1.0"
+tests:
+  systeminfo:
+    - name: "test"
+      os: ubuntu`,
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -358,6 +445,68 @@ func TestSpecValidation(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "valid ping test",
+			spec: &Spec{
+				Tests: Tests{
+					Ping: []PingTest{
+						{
+							Name: "test",
+							Host: "google.com",
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid dns test",
+			spec: &Spec{
+				Tests: Tests{
+					DNS: []DNSTest{
+						{
+							Name: "test",
+							Host: "google.com",
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "systeminfo test defaults to exact version_match",
+			spec: &Spec{
+				Tests: Tests{
+					SystemInfo: []SystemInfoTest{
+						{
+							Name: "test",
+							OS:   "ubuntu",
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid systeminfo test with all fields",
+			spec: &Spec{
+				Tests: Tests{
+					SystemInfo: []SystemInfoTest{
+						{
+							Name:          "test",
+							OS:            "ubuntu",
+							OSVersion:     "22.04",
+							Arch:          "x86_64",
+							KernelVersion: "5.15",
+							Hostname:      "web01",
+							FQDN:          "web01.example.com",
+							VersionMatch:  "prefix",
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -390,6 +539,11 @@ func TestSpecValidation(t *testing.T) {
 				for _, ft := range tt.spec.Tests.Filesystems {
 					if ft.State == "" {
 						t.Error("Filesystem state should default to mounted")
+					}
+				}
+				for _, st := range tt.spec.Tests.SystemInfo {
+					if st.VersionMatch == "" {
+						t.Error("SystemInfo version_match should default to exact")
 					}
 				}
 			}

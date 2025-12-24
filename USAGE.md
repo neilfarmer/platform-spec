@@ -70,6 +70,9 @@ tests:
   command_content: [] # Command output tests
   docker: [] # Docker container tests
   filesystems: [] # Filesystem mount tests
+  ping: [] # Network reachability tests
+  dns: [] # DNS resolution tests
+  systeminfo: [] # System information validation tests
 ```
 
 ### Metadata Section
@@ -107,6 +110,9 @@ The following assertions work for both Local and SSH providers:
 - [Command Content Assertions](docs/ssh/assertions/command_content.md) - Execute commands and validate output or exit codes
 - [Docker Assertions](docs/ssh/assertions/docker.md) - Check Docker container status and properties
 - [Filesystem Assertions](docs/ssh/assertions/filesystems.md) - Check filesystem mount status, type, options, and disk usage
+- [Ping Assertions](docs/ssh/assertions/ping.md) - Check network reachability using ICMP ping
+- [DNS Assertions](docs/ssh/assertions/dns.md) - Check DNS resolution for hostnames
+- [System Info Assertions](docs/ssh/assertions/systeminfo.md) - Validate system properties (OS, architecture, kernel, hostname)
 
 ## Output
 

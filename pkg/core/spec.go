@@ -41,6 +41,9 @@ type Tests struct {
 	CommandContent []CommandContentTest `yaml:"command_content"`
 	Docker         []DockerTest         `yaml:"docker"`
 	Filesystems    []FilesystemTest     `yaml:"filesystems"`
+	Ping           []PingTest           `yaml:"ping"`
+	DNS            []DNSTest            `yaml:"dns"`
+	SystemInfo     []SystemInfoTest     `yaml:"systeminfo"`
 }
 
 // PackageTest represents a package installation test
@@ -123,6 +126,30 @@ type FilesystemTest struct {
 	Options         []string `yaml:"options,omitempty"`          // rw, ro, noexec, nosuid, etc.
 	MinSizeGB       int      `yaml:"min_size_gb,omitempty"`      // minimum size in GB
 	MaxUsagePercent int      `yaml:"max_usage_percent,omitempty"` // maximum usage percentage
+}
+
+// PingTest represents a network reachability test
+type PingTest struct {
+	Name string `yaml:"name"`
+	Host string `yaml:"host"`
+}
+
+// DNSTest represents a DNS resolution test
+type DNSTest struct {
+	Name string `yaml:"name"`
+	Host string `yaml:"host"`
+}
+
+// SystemInfoTest represents a system information validation test
+type SystemInfoTest struct {
+	Name           string `yaml:"name"`
+	OS             string `yaml:"os,omitempty"`              // operating system name
+	OSVersion      string `yaml:"os_version,omitempty"`      // OS version
+	Arch           string `yaml:"arch,omitempty"`            // architecture (x86_64, aarch64, etc.)
+	KernelVersion  string `yaml:"kernel_version,omitempty"`  // kernel version
+	Hostname       string `yaml:"hostname,omitempty"`        // short hostname
+	FQDN           string `yaml:"fqdn,omitempty"`            // fully qualified domain name
+	VersionMatch   string `yaml:"version_match,omitempty"`   // "exact" or "prefix" (default: exact)
 }
 
 // ParseSpec parses a YAML spec file
@@ -304,6 +331,42 @@ func (s *Spec) Validate() error {
 		}
 		if ft.MinSizeGB < 0 {
 			return fmt.Errorf("filesystem test '%s': min_size_gb must be >= 0", ft.Name)
+		}
+	}
+
+	// Validate ping tests
+	for i, pt := range s.Tests.Ping {
+		if pt.Name == "" {
+			return fmt.Errorf("ping test %d: name is required", i)
+		}
+		if pt.Host == "" {
+			return fmt.Errorf("ping test '%s': host is required", pt.Name)
+		}
+	}
+
+	// Validate DNS tests
+	for i, dt := range s.Tests.DNS {
+		if dt.Name == "" {
+			return fmt.Errorf("dns test %d: name is required", i)
+		}
+		if dt.Host == "" {
+			return fmt.Errorf("dns test '%s': host is required", dt.Name)
+		}
+	}
+
+	// Validate systeminfo tests
+	for i := range s.Tests.SystemInfo {
+		st := &s.Tests.SystemInfo[i]
+		if st.Name == "" {
+			return fmt.Errorf("systeminfo test %d: name is required", i)
+		}
+		// Set default version_match to "exact"
+		if st.VersionMatch == "" {
+			st.VersionMatch = "exact"
+		}
+		// Validate version_match value
+		if st.VersionMatch != "exact" && st.VersionMatch != "prefix" {
+			return fmt.Errorf("systeminfo test '%s': version_match must be 'exact' or 'prefix'", st.Name)
 		}
 	}
 

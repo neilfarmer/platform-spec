@@ -85,6 +85,21 @@ Check filesystem mount status, type, options, and disk usage.
 
 [View Filesystem Assertions →](assertions/filesystems.md)
 
+### Ping Assertions
+Check network reachability using ICMP ping.
+
+[View Ping Assertions →](assertions/ping.md)
+
+### DNS Assertions
+Check DNS resolution for hostnames.
+
+[View DNS Assertions →](assertions/dns.md)
+
+### System Info Assertions
+Validate system properties including OS, architecture, kernel version, and hostname.
+
+[View System Info Assertions →](assertions/systeminfo.md)
+
 ## Requirements
 
 The SSH user must have permissions to execute:
@@ -95,6 +110,8 @@ The SSH user must have permissions to execute:
 - Service commands: `systemctl`
 - Docker commands: `docker inspect` (if using Docker assertions)
 - Filesystem commands: `findmnt`, `df` (if using filesystem assertions)
+- Network commands: `ping` (if using ping assertions), `dig` or `getent` (if using DNS assertions)
+- System commands: `uname`, `hostname`, `cat` (if using systeminfo assertions)
 - Shell: `bash` or compatible
 
 ## Supported Distributions

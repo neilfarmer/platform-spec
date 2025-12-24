@@ -76,3 +76,20 @@ tests:
       path: /
       state: mounted
       fstype: ext4
+
+  ping:
+    - name: "Internet connectivity"
+      host: 8.8.8.8
+
+  dns:
+    - name: "External DNS resolution"
+      host: google.com
+
+  systeminfo:
+    - name: "Ubuntu system validation"
+      os: ubuntu
+      os_version: "24.04"
+      arch: "x86_64"
+      kernel_version: "6.8.0"
+      hostname: "srv01"
+      version_match: prefix

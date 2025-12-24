@@ -128,6 +128,36 @@ func (e *Executor) Execute(ctx context.Context) (*TestResults, error) {
 		}
 	}
 
+	for _, test := range e.spec.Tests.Ping {
+		result := e.executePingTest(ctx, test)
+		results.Results = append(results.Results, result)
+
+		// Check fail-fast
+		if e.spec.Config.FailFast && result.Status == StatusFail {
+			break
+		}
+	}
+
+	for _, test := range e.spec.Tests.DNS {
+		result := e.executeDNSTest(ctx, test)
+		results.Results = append(results.Results, result)
+
+		// Check fail-fast
+		if e.spec.Config.FailFast && result.Status == StatusFail {
+			break
+		}
+	}
+
+	for _, test := range e.spec.Tests.SystemInfo {
+		result := e.executeSystemInfoTest(ctx, test)
+		results.Results = append(results.Results, result)
+
+		// Check fail-fast
+		if e.spec.Config.FailFast && result.Status == StatusFail {
+			break
+		}
+	}
+
 	results.Duration = time.Since(startTime)
 	return results, nil
 }
@@ -1029,4 +1059,220 @@ func (e *Executor) executeFilesystemTest(ctx context.Context, test FilesystemTes
 
 	result.Duration = time.Since(start)
 	return result
+}
+
+// executePingTest executes a network reachability test using ping
+func (e *Executor) executePingTest(ctx context.Context, test PingTest) Result {
+	start := time.Now()
+	result := Result{
+		Name:    test.Name,
+		Status:  StatusPass,
+		Details: make(map[string]interface{}),
+	}
+
+	// Use ping with 1 packet and 5 second timeout
+	// -c 1: send 1 packet
+	// -W 5: wait 5 seconds for response
+	stdout, stderr, exitCode, err := e.provider.ExecuteCommand(ctx, fmt.Sprintf("ping -c 1 -W 5 %s 2>&1", shellQuote(test.Host)))
+	if err != nil {
+		result.Status = StatusError
+		result.Message = fmt.Sprintf("Error pinging %s: %v", test.Host, err)
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	result.Details["host"] = test.Host
+	result.Details["exit_code"] = exitCode
+
+	if exitCode != 0 {
+		result.Status = StatusFail
+		result.Message = fmt.Sprintf("Host %s is not reachable", test.Host)
+		if stderr != "" {
+			result.Details["error"] = stderr
+		}
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	// Parse ping output for additional info
+	if stdout != "" {
+		result.Details["output"] = strings.TrimSpace(stdout)
+	}
+
+	result.Message = fmt.Sprintf("Host %s is reachable", test.Host)
+	result.Duration = time.Since(start)
+	return result
+}
+
+// executeDNSTest executes a DNS resolution test
+func (e *Executor) executeDNSTest(ctx context.Context, test DNSTest) Result {
+	start := time.Now()
+	result := Result{
+		Name:    test.Name,
+		Status:  StatusPass,
+		Details: make(map[string]interface{}),
+	}
+
+	// Try dig first, fall back to getent hosts
+	// dig +short returns just the IP addresses
+	stdout, _, exitCode, err := e.provider.ExecuteCommand(ctx, fmt.Sprintf("dig +short %s 2>/dev/null || getent hosts %s 2>/dev/null | awk '{print $1}'", shellQuote(test.Host), shellQuote(test.Host)))
+	if err != nil {
+		result.Status = StatusError
+		result.Message = fmt.Sprintf("Error resolving DNS for %s: %v", test.Host, err)
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	result.Details["host"] = test.Host
+
+	stdout = strings.TrimSpace(stdout)
+	if exitCode != 0 || stdout == "" {
+		result.Status = StatusFail
+		result.Message = fmt.Sprintf("DNS resolution failed for %s", test.Host)
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	// Parse resolved IPs
+	ips := strings.Split(stdout, "\n")
+	var validIPs []string
+	for _, ip := range ips {
+		ip = strings.TrimSpace(ip)
+		if ip != "" {
+			validIPs = append(validIPs, ip)
+		}
+	}
+
+	if len(validIPs) == 0 {
+		result.Status = StatusFail
+		result.Message = fmt.Sprintf("DNS resolution failed for %s", test.Host)
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	result.Details["resolved_ips"] = validIPs
+	result.Message = fmt.Sprintf("DNS resolved %s to %d address(es)", test.Host, len(validIPs))
+
+	result.Duration = time.Since(start)
+	return result
+}
+
+// executeSystemInfoTest executes a system information validation test
+func (e *Executor) executeSystemInfoTest(ctx context.Context, test SystemInfoTest) Result {
+	start := time.Now()
+	result := Result{
+		Name:    test.Name,
+		Status:  StatusPass,
+		Details: make(map[string]interface{}),
+	}
+
+	// Gather system information
+	sysInfo := make(map[string]string)
+
+	// Get OS name from /etc/os-release
+	stdout, _, _, _ := e.provider.ExecuteCommand(ctx, "grep '^ID=' /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '\"'")
+	if stdout != "" {
+		sysInfo["os"] = strings.TrimSpace(stdout)
+	}
+
+	// Get OS version from /etc/os-release
+	stdout, _, _, _ = e.provider.ExecuteCommand(ctx, "grep '^VERSION_ID=' /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '\"'")
+	if stdout != "" {
+		sysInfo["os_version"] = strings.TrimSpace(stdout)
+	}
+
+	// Get architecture
+	stdout, _, _, _ = e.provider.ExecuteCommand(ctx, "uname -m 2>/dev/null")
+	if stdout != "" {
+		sysInfo["arch"] = strings.TrimSpace(stdout)
+	}
+
+	// Get kernel version
+	stdout, _, _, _ = e.provider.ExecuteCommand(ctx, "uname -r 2>/dev/null")
+	if stdout != "" {
+		sysInfo["kernel_version"] = strings.TrimSpace(stdout)
+	}
+
+	// Get hostname (short)
+	stdout, _, _, _ = e.provider.ExecuteCommand(ctx, "hostname -s 2>/dev/null")
+	if stdout != "" {
+		sysInfo["hostname"] = strings.TrimSpace(stdout)
+	}
+
+	// Get FQDN
+	stdout, _, _, _ = e.provider.ExecuteCommand(ctx, "hostname -f 2>/dev/null")
+	if stdout != "" {
+		sysInfo["fqdn"] = strings.TrimSpace(stdout)
+	}
+
+	// Store all gathered info in details
+	for k, v := range sysInfo {
+		result.Details[k] = v
+	}
+
+	// Validate each specified field
+	var failures []string
+
+	// Check OS
+	if test.OS != "" {
+		if sysInfo["os"] != test.OS {
+			failures = append(failures, fmt.Sprintf("OS is '%s', expected '%s'", sysInfo["os"], test.OS))
+		}
+	}
+
+	// Check OS version
+	if test.OSVersion != "" {
+		if !versionMatches(sysInfo["os_version"], test.OSVersion, test.VersionMatch) {
+			failures = append(failures, fmt.Sprintf("OS version is '%s', expected '%s'", sysInfo["os_version"], test.OSVersion))
+		}
+	}
+
+	// Check architecture
+	if test.Arch != "" {
+		if sysInfo["arch"] != test.Arch {
+			failures = append(failures, fmt.Sprintf("Architecture is '%s', expected '%s'", sysInfo["arch"], test.Arch))
+		}
+	}
+
+	// Check kernel version
+	if test.KernelVersion != "" {
+		if !versionMatches(sysInfo["kernel_version"], test.KernelVersion, test.VersionMatch) {
+			failures = append(failures, fmt.Sprintf("Kernel version is '%s', expected '%s'", sysInfo["kernel_version"], test.KernelVersion))
+		}
+	}
+
+	// Check hostname
+	if test.Hostname != "" {
+		if sysInfo["hostname"] != test.Hostname {
+			failures = append(failures, fmt.Sprintf("Hostname is '%s', expected '%s'", sysInfo["hostname"], test.Hostname))
+		}
+	}
+
+	// Check FQDN
+	if test.FQDN != "" {
+		if sysInfo["fqdn"] != test.FQDN {
+			failures = append(failures, fmt.Sprintf("FQDN is '%s', expected '%s'", sysInfo["fqdn"], test.FQDN))
+		}
+	}
+
+	// Set result based on failures
+	if len(failures) > 0 {
+		result.Status = StatusFail
+		result.Message = strings.Join(failures, "; ")
+	} else {
+		result.Message = "System information matches all specified criteria"
+	}
+
+	result.Duration = time.Since(start)
+	return result
+}
+
+// versionMatches checks if an actual version matches the expected version
+// based on the match mode ("exact" or "prefix")
+func versionMatches(actual, expected, matchMode string) bool {
+	if matchMode == "exact" {
+		return actual == expected
+	}
+	// prefix mode
+	return strings.HasPrefix(actual, expected)
 }
