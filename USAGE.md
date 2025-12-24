@@ -69,6 +69,7 @@ tests:
   file_content: [] # File content tests
   command_content: [] # Command output tests
   docker: [] # Docker container tests
+  filesystems: [] # Filesystem mount tests
 ```
 
 ### Metadata Section
@@ -105,6 +106,7 @@ The following assertions work for both Local and SSH providers:
 - [File Content Assertions](docs/ssh/assertions/file_content.md) - Check file contents for strings or regex patterns
 - [Command Content Assertions](docs/ssh/assertions/command_content.md) - Execute commands and validate output or exit codes
 - [Docker Assertions](docs/ssh/assertions/docker.md) - Check Docker container status and properties
+- [Filesystem Assertions](docs/ssh/assertions/filesystems.md) - Check filesystem mount status, type, options, and disk usage
 
 ## Output
 

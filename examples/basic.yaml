@@ -70,3 +70,9 @@ tests:
       container: grafana
       state: running
       restart_policy: unless-stopped
+
+  filesystems:
+    - name: "Root filesystem mounted"
+      path: /
+      state: mounted
+      fstype: ext4

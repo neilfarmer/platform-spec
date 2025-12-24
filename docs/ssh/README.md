@@ -75,6 +75,16 @@ Execute custom commands and validate output or exit codes.
 
 [View Command Content Assertions →](assertions/command_content.md)
 
+### Docker Assertions
+Check Docker container status and properties.
+
+[View Docker Assertions →](assertions/docker.md)
+
+### Filesystem Assertions
+Check filesystem mount status, type, options, and disk usage.
+
+[View Filesystem Assertions →](assertions/filesystems.md)
+
 ## Requirements
 
 The SSH user must have permissions to execute:
@@ -83,6 +93,8 @@ The SSH user must have permissions to execute:
 - Content search: `grep`
 - User/group commands: `id`, `getent`
 - Service commands: `systemctl`
+- Docker commands: `docker inspect` (if using Docker assertions)
+- Filesystem commands: `findmnt`, `df` (if using filesystem assertions)
 - Shell: `bash` or compatible
 
 ## Supported Distributions

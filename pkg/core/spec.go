@@ -40,6 +40,7 @@ type Tests struct {
 	FileContent    []FileContentTest    `yaml:"file_content"`
 	CommandContent []CommandContentTest `yaml:"command_content"`
 	Docker         []DockerTest         `yaml:"docker"`
+	Filesystems    []FilesystemTest     `yaml:"filesystems"`
 }
 
 // PackageTest represents a package installation test
@@ -111,6 +112,17 @@ type DockerTest struct {
 	Image         string   `yaml:"image,omitempty"`
 	RestartPolicy string   `yaml:"restart_policy,omitempty"` // no, always, on-failure, unless-stopped
 	Health        string   `yaml:"health,omitempty"`         // healthy, unhealthy, starting, none
+}
+
+// FilesystemTest represents a filesystem/mount point test
+type FilesystemTest struct {
+	Name            string   `yaml:"name"`
+	Path            string   `yaml:"path"`
+	State           string   `yaml:"state"`                      // mounted, unmounted
+	Fstype          string   `yaml:"fstype,omitempty"`           // ext4, xfs, tmpfs, etc.
+	Options         []string `yaml:"options,omitempty"`          // rw, ro, noexec, nosuid, etc.
+	MinSizeGB       int      `yaml:"min_size_gb,omitempty"`      // minimum size in GB
+	MaxUsagePercent int      `yaml:"max_usage_percent,omitempty"` // maximum usage percentage
 }
 
 // ParseSpec parses a YAML spec file
@@ -269,6 +281,29 @@ func (s *Spec) Validate() error {
 			if !validHealth[dt.Health] {
 				return fmt.Errorf("docker test '%s': health must be 'healthy', 'unhealthy', 'starting', or 'none'", dt.Name)
 			}
+		}
+	}
+
+	// Validate filesystem tests
+	for i := range s.Tests.Filesystems {
+		ft := &s.Tests.Filesystems[i]
+		if ft.Name == "" {
+			return fmt.Errorf("filesystem test %d: name is required", i)
+		}
+		if ft.Path == "" {
+			return fmt.Errorf("filesystem test '%s': path is required", ft.Name)
+		}
+		if ft.State == "" {
+			ft.State = "mounted"
+		}
+		if ft.State != "mounted" && ft.State != "unmounted" {
+			return fmt.Errorf("filesystem test '%s': state must be 'mounted' or 'unmounted'", ft.Name)
+		}
+		if ft.MaxUsagePercent < 0 || ft.MaxUsagePercent > 100 {
+			return fmt.Errorf("filesystem test '%s': max_usage_percent must be between 0 and 100", ft.Name)
+		}
+		if ft.MinSizeGB < 0 {
+			return fmt.Errorf("filesystem test '%s': min_size_gb must be >= 0", ft.Name)
 		}
 	}
 

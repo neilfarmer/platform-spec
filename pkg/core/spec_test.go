@@ -139,6 +139,77 @@ tests:
       health: invalid`,
 			wantErr: true,
 		},
+		{
+			name: "valid filesystem test",
+			yaml: `version: "1.0"
+tests:
+  filesystems:
+    - name: "root filesystem"
+      path: /
+      state: mounted`,
+			wantErr: false,
+		},
+		{
+			name: "filesystem test missing name",
+			yaml: `version: "1.0"
+tests:
+  filesystems:
+    - path: /
+      state: mounted`,
+			wantErr: true,
+		},
+		{
+			name: "filesystem test missing path",
+			yaml: `version: "1.0"
+tests:
+  filesystems:
+    - name: "test"
+      state: mounted`,
+			wantErr: true,
+		},
+		{
+			name: "filesystem test invalid state",
+			yaml: `version: "1.0"
+tests:
+  filesystems:
+    - name: "test"
+      path: /
+      state: invalid`,
+			wantErr: true,
+		},
+		{
+			name: "filesystem test invalid max_usage_percent negative",
+			yaml: `version: "1.0"
+tests:
+  filesystems:
+    - name: "test"
+      path: /
+      state: mounted
+      max_usage_percent: -1`,
+			wantErr: true,
+		},
+		{
+			name: "filesystem test invalid max_usage_percent over 100",
+			yaml: `version: "1.0"
+tests:
+  filesystems:
+    - name: "test"
+      path: /
+      state: mounted
+      max_usage_percent: 101`,
+			wantErr: true,
+		},
+		{
+			name: "filesystem test invalid min_size_gb negative",
+			yaml: `version: "1.0"
+tests:
+  filesystems:
+    - name: "test"
+      path: /
+      state: mounted
+      min_size_gb: -1`,
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -254,6 +325,39 @@ func TestSpecValidation(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "filesystem test defaults to mounted state",
+			spec: &Spec{
+				Tests: Tests{
+					Filesystems: []FilesystemTest{
+						{
+							Name: "test",
+							Path: "/",
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid filesystem test with all properties",
+			spec: &Spec{
+				Tests: Tests{
+					Filesystems: []FilesystemTest{
+						{
+							Name:            "test",
+							Path:            "/data",
+							State:           "mounted",
+							Fstype:          "ext4",
+							Options:         []string{"rw", "noexec"},
+							MinSizeGB:       100,
+							MaxUsagePercent: 80,
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -281,6 +385,11 @@ func TestSpecValidation(t *testing.T) {
 				for _, dt := range tt.spec.Tests.Docker {
 					if dt.State == "" {
 						t.Error("Docker state should default to running")
+					}
+				}
+				for _, ft := range tt.spec.Tests.Filesystems {
+					if ft.State == "" {
+						t.Error("Filesystem state should default to mounted")
 					}
 				}
 			}
