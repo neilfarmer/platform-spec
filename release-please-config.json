@@ -1,0 +1,25 @@
+{
+  "packages": {
+    ".": {
+      "release-type": "go",
+      "package-name": "platform-spec",
+      "changelog-sections": [
+        {"type": "feat", "section": "Features"},
+        {"type": "fix", "section": "Bug Fixes"},
+        {"type": "perf", "section": "Performance Improvements"},
+        {"type": "refactor", "section": "Code Refactoring"},
+        {"type": "docs", "section": "Documentation"},
+        {"type": "test", "section": "Tests"},
+        {"type": "build", "section": "Build System"},
+        {"type": "ci", "section": "Continuous Integration"}
+      ],
+      "extra-files": [
+        {
+          "type": "plain",
+          "path": "cmd/platform-spec/version.go",
+          "glob": false
+        }
+      ]
+    }
+  }
+}

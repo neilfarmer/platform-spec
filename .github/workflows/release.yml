@@ -1,0 +1,61 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Build binaries
+        run: |
+          # macOS ARM64
+          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o dist/platform-spec-darwin-arm64 ./cmd/platform-spec
+
+          # Linux AMD64
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dist/platform-spec-linux-amd64 ./cmd/platform-spec
+
+          # Create tarballs
+          cd dist
+          tar -czf platform-spec-darwin-arm64.tar.gz platform-spec-darwin-arm64
+          tar -czf platform-spec-linux-amd64.tar.gz platform-spec-linux-amd64
+
+          # Generate checksums
+          sha256sum *.tar.gz > checksums.txt
+          cd ..
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/platform-spec-darwin-arm64.tar.gz
+            dist/platform-spec-linux-amd64.tar.gz
+            dist/checksums.txt
+          generate_release_notes: true
+          body: |
+            ## Installation
+
+            **macOS (ARM64)**
+            ```bash
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/platform-spec-darwin-arm64.tar.gz | tar xz
+            sudo mv platform-spec-darwin-arm64 /usr/local/bin/platform-spec
+            ```
+
+            **Linux (AMD64)**
+            ```bash
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/platform-spec-linux-amd64.tar.gz | tar xz
+            sudo mv platform-spec-linux-amd64 /usr/local/bin/platform-spec
+            ```

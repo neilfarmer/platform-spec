@@ -30,3 +30,18 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Build output
+dist/
+bin/
+
+# Test files (except examples and config)
+*.yaml
+*.yml
+!examples/*.yaml
+!examples/*.yml
+!.github/**/*.yaml
+!.github/**/*.yml
+!.goreleaser.yaml
+!*-config.yml
+!*-config.yaml

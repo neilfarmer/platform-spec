@@ -1,0 +1,16 @@
+# Example spec file
+# Usage: dist/platform-spec test ssh -i ~/.ssh/key.pem ubuntu@host examples/basic.yaml
+
+packages:
+  - docker-ce
+  - docker-compose
+
+directories:
+  - /opt
+  - /opt/monitoring
+
+files:
+  - /opt/monitoring/docker-compose.yml
+
+file_content:
+  - /opt/monitoring/docker-compose.yml:"grafana/grafana"
