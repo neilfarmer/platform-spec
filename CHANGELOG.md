@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/neilfarmer/platform-spec/compare/v0.1.0...v0.2.0) (2025-12-24)
+
+
+### Features
+
+* Add http assertion ([a5b66fb](https://github.com/neilfarmer/platform-spec/commit/a5b66fb3822eb18594856745dec7d02a535a4b08))
+
 ## [0.1.0](https://github.com/neilfarmer/platform-spec/compare/v0.0.1...v0.1.0) (2025-12-24)
 
 
