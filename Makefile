@@ -1,4 +1,4 @@
-.PHONY: build clean test install release-build
+.PHONY: build clean test test-verbose install release-build
 
 build:
 	mkdir -p dist
@@ -13,7 +13,7 @@ clean:
 	rm -rf dist/
 
 test:
-	go test ./...
+	go test -v -count=1 ./...
 
 install: build
 	cp dist/platform-spec $(GOPATH)/bin/platform-spec

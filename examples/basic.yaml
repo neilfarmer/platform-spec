@@ -1,16 +1,66 @@
 # Example spec file
-# Usage: dist/platform-spec test ssh -i ~/.ssh/key.pem ubuntu@host examples/basic.yaml
+# Usage:
+#   With SSH agent: dist/platform-spec test ssh ubuntu@host examples/basic.yaml
+#   With key file:  dist/platform-spec test ssh -i ~/.ssh/key.pem ubuntu@host examples/basic.yaml
 
-packages:
-  - docker-ce
-  - docker-compose
+version: "1.0"
 
-directories:
-  - /opt
-  - /opt/monitoring
+metadata:
+  name: "Basic System Test"
+  description: "Tests basic system packages and files"
+  tags: ["example", "basic"]
 
-files:
-  - /opt/monitoring/docker-compose.yml
+config:
+  fail_fast: false
+  parallel: false
+  timeout: 300
 
-file_content:
-  - /opt/monitoring/docker-compose.yml:"grafana/grafana"
+tests:
+  packages:
+    - name: "Docker installed"
+      packages:
+        - docker-ce
+      state: present
+      version: 5:29.1.3-1~ubuntu.24.04~noble
+
+  files:
+    - name: "/opt directory exists"
+      path: /opt
+      type: directory
+      mode: "1777"
+
+    - name: "/opt/monitoring/docker-compose.yml file exists"
+      path: /opt/monitoring/docker-compose.yml
+      type: file
+      owner: root
+      group: root
+
+  services:
+    - name: "Docker running"
+      service: docker
+      state: running
+      enabled: true
+
+  users:
+    - name: "Ubuntu user exists"
+      user: ubuntu
+      shell: /bin/bash
+      home: /home/ubuntu
+
+  groups:
+    - name: "Docker group exists"
+      groups:
+        - docker
+      state: present
+
+  file_content:
+    - name: "Docker compose file contains grafana keyword"
+      path: /opt/monitoring/docker-compose.yml
+      contains:
+        - "grafana"
+
+  command_content:
+    - name: "Docker version check"
+      command: docker --version
+      contains:
+        - "Docker version"

@@ -1,9 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"time"
 
+	"github.com/neilfarmer/platform-spec/pkg/core"
+	"github.com/neilfarmer/platform-spec/pkg/output"
+	"github.com/neilfarmer/platform-spec/pkg/providers/ssh"
 	"github.com/spf13/cobra"
 )
 
@@ -16,7 +21,6 @@ var (
 	// Output flags
 	outputFormat string
 	verbose      bool
-	dryRun       bool
 )
 
 var testCmd = &cobra.Command{
@@ -60,7 +64,6 @@ func init() {
 	// Output flags (shared across all test commands)
 	sshCmd.Flags().StringVarP(&outputFormat, "output", "o", "human", "Output format (human, json, junit)")
 	sshCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Verbose output")
-	sshCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Show what would be tested without executing")
 
 	// Add subcommands to test
 	testCmd.AddCommand(sshCmd)
@@ -72,25 +75,82 @@ func runSSHTest(cmd *cobra.Command, args []string) {
 	target := args[0]
 	specFiles := args[1:]
 
-	fmt.Printf("Platform-Spec SSH Test\n")
-	fmt.Printf("======================\n\n")
-	fmt.Printf("Target: %s\n", target)
-	fmt.Printf("Port: %d\n", sshPort)
-	if identityFile != "" {
-		fmt.Printf("Identity: %s\n", identityFile)
+	if verbose {
+		fmt.Printf("Target: %s\n", target)
+		fmt.Printf("Port: %d\n", sshPort)
+		if identityFile != "" {
+			fmt.Printf("Identity: %s\n", identityFile)
+		}
+		fmt.Printf("Spec files: %v\n", specFiles)
+		fmt.Printf("\n")
 	}
-	fmt.Printf("Spec files: %v\n", specFiles)
-	fmt.Printf("Output format: %s\n", outputFormat)
-	if dryRun {
-		fmt.Printf("Mode: DRY RUN\n")
-	}
-	fmt.Printf("\n")
 
-	// TODO: Implement actual SSH testing logic
-	fmt.Println("SSH testing implementation coming soon...")
-	fmt.Println("\nThis will:")
-	fmt.Println("  1. Parse YAML spec files")
-	fmt.Println("  2. Connect to target via SSH")
-	fmt.Println("  3. Execute tests")
-	fmt.Println("  4. Report results")
+	// Parse target
+	user, host, err := ssh.ParseTarget(target, "")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Create SSH provider
+	sshProvider := ssh.NewProvider(&ssh.Config{
+		Host:         host,
+		Port:         sshPort,
+		User:         user,
+		IdentityFile: identityFile,
+		Timeout:      time.Duration(timeout) * time.Second,
+	})
+
+	// Connect to target
+	ctx := context.Background()
+	if err := sshProvider.Connect(ctx); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to connect: %v\n", err)
+		os.Exit(1)
+	}
+	defer sshProvider.Close()
+
+	if verbose {
+		fmt.Printf("Connected to %s@%s\n\n", user, host)
+	}
+
+	// Execute tests for each spec file
+	var allResults []*core.TestResults
+	for _, specFile := range specFiles {
+		// Parse spec
+		spec, err := core.ParseSpec(specFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to parse spec %s: %v\n", specFile, err)
+			os.Exit(1)
+		}
+
+		// Execute tests
+		executor := core.NewExecutor(spec, sshProvider)
+		results, err := executor.Execute(ctx)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to execute tests: %v\n", err)
+			os.Exit(1)
+		}
+
+		results.Target = fmt.Sprintf("%s@%s", user, host)
+		allResults = append(allResults, results)
+	}
+
+	// Output results
+	for _, results := range allResults {
+		switch outputFormat {
+		case "json":
+			fmt.Println("JSON output not yet implemented")
+		case "junit":
+			fmt.Println("JUnit output not yet implemented")
+		default:
+			fmt.Print(output.FormatHuman(results))
+		}
+	}
+
+	// Exit with error code if any tests failed
+	for _, results := range allResults {
+		if !results.Success() {
+			os.Exit(1)
+		}
+	}
 }

@@ -1,12 +1,11 @@
 # platform-spec
 
-Infrastructure testing and verification tool.
+A pluggable infrastructure testing framework that validates system state across multiple platforms using declarative YAML specifications.
 
 ## Installation
 
-### Download pre-built binary
-
 **macOS (ARM64)**
+
 ```bash
 curl -L https://github.com/neilfarmer/platform-spec/releases/download/v0.0.1/platform-spec_0.0.1_darwin_arm64.zip -o platform-spec.zip
 unzip platform-spec.zip
@@ -15,44 +14,63 @@ rm platform-spec.zip
 ```
 
 **Linux (AMD64)**
+
 ```bash
 curl -L https://github.com/neilfarmer/platform-spec/releases/download/v0.0.1/platform-spec_0.0.1_linux_amd64.tar.gz | tar xz
 sudo mv platform-spec /usr/local/bin/platform-spec
 ```
 
-**Note**: Replace `v0.0.1` with the desired version, or check the [releases page](https://github.com/neilfarmer/platform-spec/releases) for the latest version.
+See [releases page](https://github.com/neilfarmer/platform-spec/releases) for other versions.
 
-### Build from source
+## Quick Start
 
-```bash
-# Using make
-make build
+Create a spec file `mytest.yaml`:
 
-# Or manually
-go build -o dist/platform-spec ./cmd/platform-spec
+```yaml
+version: "1.0"
+tests:
+  packages:
+    - name: "Docker installed"
+      packages: [docker-ce]
+      state: present
+  files:
+    - name: "Config directory exists"
+      path: /etc/myapp
+      type: directory
 ```
 
-## Usage
+Run the tests:
 
 ```bash
-# SSH testing
-dist/platform-spec test ssh -i ~/.ssh/key.pem ubuntu@192.168.1.100 spec.yaml
-
-# With custom port
-dist/platform-spec test ssh -i ~/.ssh/key.pem -p 2222 ubuntu@host spec.yaml
-
-# Multiple spec files
-dist/platform-spec test ssh -i ~/.ssh/key.pem ubuntu@host spec1.yaml spec2.yaml
-
-# JSON output
-dist/platform-spec test ssh -i ~/.ssh/key.pem ubuntu@host spec.yaml -o json
-
-# Dry run
-dist/platform-spec test ssh -i ~/.ssh/key.pem ubuntu@host spec.yaml --dry-run
+platform-spec test ssh ubuntu@myhost mytest.yaml
 ```
 
-## Providers
+See [USAGE.md](USAGE.md) for complete documentation.
 
-- **SSH**: Connect to Linux systems via SSH (in development)
-- **AWS**: AWS infrastructure testing (planned)
-- **OpenStack**: OpenStack infrastructure testing (planned)
+## Roadmap
+
+### Phase 1: Core Framework ✅
+
+- SSH provider with agent support
+- Package assertions (dpkg, rpm, apk)
+- File/directory assertions
+- Human-readable output
+
+### Phase 2: Enhanced Assertions (In Progress)
+
+- Service status testing
+- User/group testing
+- Custom command assertions
+- File content matching
+
+### Phase 3: Advanced Features
+
+- JSON and JUnit output formats
+- Parallel execution
+- Variable substitution
+
+### Phase 4: Cloud Providers
+
+- AWS provider (EC2, S3, IAM, RDS)
+- OpenStack provider
+- Kubernetes provider
