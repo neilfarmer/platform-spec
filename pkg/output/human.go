@@ -7,6 +7,15 @@ import (
 	"github.com/neilfarmer/platform-spec/pkg/core"
 )
 
+// ANSI color codes
+const (
+	colorReset  = "\033[0m"
+	colorRed    = "\033[31m"
+	colorGreen  = "\033[32m"
+	colorYellow = "\033[33m"
+	colorBold   = "\033[1m"
+)
+
 // FormatHuman formats test results in human-readable format
 func FormatHuman(results *core.TestResults) string {
 	var sb strings.Builder
@@ -25,10 +34,12 @@ func FormatHuman(results *core.TestResults) string {
 	// Print individual test results
 	for _, result := range results.Results {
 		symbol := getStatusSymbol(result.Status)
-		sb.WriteString(fmt.Sprintf("%s %s (%.2fs)\n", symbol, result.Name, result.Duration.Seconds()))
+		color := getStatusColor(result.Status)
+		sb.WriteString(fmt.Sprintf("%s%s %s%s (%.2fs)\n",
+			color, symbol, result.Name, colorReset, result.Duration.Seconds()))
 
 		if result.Message != "" && result.Status != core.StatusPass {
-			sb.WriteString(fmt.Sprintf("  %s\n", result.Message))
+			sb.WriteString(fmt.Sprintf("  %s%s%s\n", color, result.Message, colorReset))
 		}
 	}
 
@@ -41,9 +52,9 @@ func FormatHuman(results *core.TestResults) string {
 	sb.WriteString(fmt.Sprintf("Duration: %.2fs\n", results.Duration.Seconds()))
 
 	if results.Success() {
-		sb.WriteString("Status: PASSED\n")
+		sb.WriteString(fmt.Sprintf("Status: %s%sPASSED%s\n", colorBold, colorGreen, colorReset))
 	} else {
-		sb.WriteString("Status: FAILED\n")
+		sb.WriteString(fmt.Sprintf("Status: %s%sFAILED%s\n", colorBold, colorRed, colorReset))
 	}
 
 	return sb.String()
@@ -61,5 +72,20 @@ func getStatusSymbol(status core.Status) string {
 		return "⚠"
 	default:
 		return "?"
+	}
+}
+
+func getStatusColor(status core.Status) string {
+	switch status {
+	case core.StatusPass:
+		return colorGreen
+	case core.StatusFail:
+		return colorRed
+	case core.StatusSkip:
+		return colorYellow
+	case core.StatusError:
+		return colorYellow
+	default:
+		return colorReset
 	}
 }

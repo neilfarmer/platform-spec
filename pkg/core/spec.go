@@ -39,6 +39,7 @@ type Tests struct {
 	Groups         []GroupTest          `yaml:"groups"`
 	FileContent    []FileContentTest    `yaml:"file_content"`
 	CommandContent []CommandContentTest `yaml:"command_content"`
+	Docker         []DockerTest         `yaml:"docker"`
 }
 
 // PackageTest represents a package installation test
@@ -99,6 +100,17 @@ type FileContentTest struct {
 	Path     string   `yaml:"path"`
 	Contains []string `yaml:"contains,omitempty"` // strings that must be present
 	Matches  string   `yaml:"matches,omitempty"`  // regex pattern to match
+}
+
+// DockerTest represents a Docker container test
+type DockerTest struct {
+	Name          string   `yaml:"name"`
+	Container     string   `yaml:"container,omitempty"`
+	Containers    []string `yaml:"containers,omitempty"`
+	State         string   `yaml:"state"`          // running, stopped, exists
+	Image         string   `yaml:"image,omitempty"`
+	RestartPolicy string   `yaml:"restart_policy,omitempty"` // no, always, on-failure, unless-stopped
+	Health        string   `yaml:"health,omitempty"`         // healthy, unhealthy, starting, none
 }
 
 // ParseSpec parses a YAML spec file
@@ -223,6 +235,40 @@ func (s *Spec) Validate() error {
 		}
 		if len(ct.Contains) == 0 && ct.ExitCode == 0 {
 			return fmt.Errorf("command_content test '%s': either contains or exit_code is required", ct.Name)
+		}
+	}
+
+	// Validate docker tests
+	for i := range s.Tests.Docker {
+		dt := &s.Tests.Docker[i]
+		if dt.Name == "" {
+			return fmt.Errorf("docker test %d: name is required", i)
+		}
+		if dt.Container == "" && len(dt.Containers) == 0 {
+			return fmt.Errorf("docker test '%s': container or containers is required", dt.Name)
+		}
+		if dt.Container != "" && len(dt.Containers) > 0 {
+			return fmt.Errorf("docker test '%s': cannot specify both container and containers", dt.Name)
+		}
+		if dt.State == "" {
+			dt.State = "running"
+		}
+		if dt.State != "running" && dt.State != "stopped" && dt.State != "exists" {
+			return fmt.Errorf("docker test '%s': state must be 'running', 'stopped', or 'exists'", dt.Name)
+		}
+		// Validate restart policy if specified
+		if dt.RestartPolicy != "" {
+			validPolicies := map[string]bool{"no": true, "always": true, "on-failure": true, "unless-stopped": true}
+			if !validPolicies[dt.RestartPolicy] {
+				return fmt.Errorf("docker test '%s': restart_policy must be 'no', 'always', 'on-failure', or 'unless-stopped'", dt.Name)
+			}
+		}
+		// Validate health if specified
+		if dt.Health != "" {
+			validHealth := map[string]bool{"healthy": true, "unhealthy": true, "starting": true, "none": true}
+			if !validHealth[dt.Health] {
+				return fmt.Errorf("docker test '%s': health must be 'healthy', 'unhealthy', 'starting', or 'none'", dt.Name)
+			}
 		}
 	}
 

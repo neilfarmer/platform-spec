@@ -27,13 +27,13 @@ tests:
     - name: "/opt directory exists"
       path: /opt
       type: directory
-      mode: "1777"
+      mode: "755"
 
     - name: "/opt/monitoring/docker-compose.yml file exists"
       path: /opt/monitoring/docker-compose.yml
       type: file
-      owner: root
-      group: root
+      owner: neil
+      group: neil
 
   services:
     - name: "Docker running"
@@ -42,10 +42,10 @@ tests:
       enabled: true
 
   users:
-    - name: "Ubuntu user exists"
-      user: ubuntu
+    - name: "Neil user exists"
+      user: neil
       shell: /bin/bash
-      home: /home/ubuntu
+      home: /home/neil
 
   groups:
     - name: "Docker group exists"
@@ -64,3 +64,9 @@ tests:
       command: docker --version
       contains:
         - "Docker version"
+
+  docker:
+    - name: "Grafana container running"
+      container: grafana
+      state: running
+      restart_policy: unless-stopped

@@ -79,6 +79,66 @@ tests:
       type: invalid`,
 			wantErr: true,
 		},
+		{
+			name: "valid docker test",
+			yaml: `version: "1.0"
+tests:
+  docker:
+    - name: "test container"
+      container: nginx
+      state: running`,
+			wantErr: false,
+		},
+		{
+			name: "docker test missing name",
+			yaml: `version: "1.0"
+tests:
+  docker:
+    - container: nginx
+      state: running`,
+			wantErr: true,
+		},
+		{
+			name: "docker test missing container",
+			yaml: `version: "1.0"
+tests:
+  docker:
+    - name: "test"
+      state: running`,
+			wantErr: true,
+		},
+		{
+			name: "docker test invalid state",
+			yaml: `version: "1.0"
+tests:
+  docker:
+    - name: "test"
+      container: nginx
+      state: invalid`,
+			wantErr: true,
+		},
+		{
+			name: "docker test invalid restart policy",
+			yaml: `version: "1.0"
+tests:
+  docker:
+    - name: "test"
+      container: nginx
+      state: running
+      restart_policy: invalid`,
+			wantErr: true,
+		},
+		{
+			name: "docker test invalid health",
+			yaml: `version: "1.0"
+tests:
+  docker:
+    - name: "test"
+      container: nginx
+      state: running
+      health: invalid`,
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -162,6 +222,38 @@ func TestSpecValidation(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "docker test defaults to running state",
+			spec: &Spec{
+				Tests: Tests{
+					Docker: []DockerTest{
+						{
+							Name:      "test",
+							Container: "nginx",
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid docker test with properties",
+			spec: &Spec{
+				Tests: Tests{
+					Docker: []DockerTest{
+						{
+							Name:          "test",
+							Container:     "nginx",
+							State:         "running",
+							Image:         "nginx:latest",
+							RestartPolicy: "always",
+							Health:        "healthy",
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -184,6 +276,11 @@ func TestSpecValidation(t *testing.T) {
 				for _, ft := range tt.spec.Tests.Files {
 					if ft.Type == "" {
 						t.Error("File type should default to file")
+					}
+				}
+				for _, dt := range tt.spec.Tests.Docker {
+					if dt.State == "" {
+						t.Error("Docker state should default to running")
 					}
 				}
 			}

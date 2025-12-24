@@ -50,6 +50,7 @@ tests:
   groups: [] # Group tests
   file_content: [] # File content tests
   commands: [] # Command output tests
+  docker: [] # Docker container tests
 ```
 
 ### Metadata Section
@@ -86,6 +87,7 @@ Available assertions depend on the provider:
 - [Group Assertions](docs/ssh/assertions/groups.md) - Check if groups exist or are absent
 - [File Content Assertions](docs/ssh/assertions/file_content.md) - Check file contents for strings or regex patterns
 - [Command Content Assertions](docs/ssh/assertions/command_content.md) - Execute commands and validate output or exit codes
+- [Docker Assertions](docs/ssh/assertions/docker.md) - Check Docker container status and properties
 
 ## Output
 

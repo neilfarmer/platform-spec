@@ -40,7 +40,7 @@ func TestFormatHuman(t *testing.T) {
 				"✓ Test 1",
 				"✓ Test 2",
 				"2 passed, 0 failed",
-				"Status: PASSED",
+				"PASSED",
 			},
 		},
 		{
@@ -73,7 +73,7 @@ func TestFormatHuman(t *testing.T) {
 				"Test failed",
 				"○ Test 3",
 				"1 passed, 1 failed, 1 skipped",
-				"Status: FAILED",
+				"FAILED",
 			},
 		},
 		{
@@ -93,7 +93,7 @@ func TestFormatHuman(t *testing.T) {
 				"⚠ Test 1",
 				"Error occurred",
 				"0 passed, 0 failed, 0 skipped, 1 errors",
-				"Status: FAILED",
+				"FAILED",
 			},
 		},
 	}
@@ -126,6 +126,26 @@ func TestGetStatusSymbol(t *testing.T) {
 		t.Run(string(tt.status), func(t *testing.T) {
 			if got := getStatusSymbol(tt.status); got != tt.want {
 				t.Errorf("getStatusSymbol(%v) = %v, want %v", tt.status, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetStatusColor(t *testing.T) {
+	tests := []struct {
+		status core.Status
+		want   string
+	}{
+		{core.StatusPass, colorGreen},
+		{core.StatusFail, colorRed},
+		{core.StatusSkip, colorYellow},
+		{core.StatusError, colorYellow},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.status), func(t *testing.T) {
+			if got := getStatusColor(tt.status); got != tt.want {
+				t.Errorf("getStatusColor(%v) = %v, want %v", tt.status, got, tt.want)
 			}
 		})
 	}
