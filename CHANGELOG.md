@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/neilfarmer/platform-spec/compare/v0.3.0...v0.3.1) (2025-12-24)
+
+
+### Bug Fixes
+
+* Fix releases ([99defce](https://github.com/neilfarmer/platform-spec/commit/99defce798843324c6a066e680bba0688469a597))
+
 ## [0.3.0](https://github.com/neilfarmer/platform-spec/compare/v0.2.0...v0.3.0) (2025-12-24)
 
 
