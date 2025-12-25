@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/neilfarmer/platform-spec/compare/v0.3.1...v0.4.0) (2025-12-25)
+
+
+### Features
+
+* Add kubernetes provider ([0f8de50](https://github.com/neilfarmer/platform-spec/commit/0f8de5028ca559b0a627771451b84a16c125f300))
+
 ## [0.3.1](https://github.com/neilfarmer/platform-spec/compare/v0.3.0...v0.3.1) (2025-12-24)
 
 
