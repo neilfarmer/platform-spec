@@ -45,3 +45,5 @@ bin/
 !.goreleaser.yaml
 !*-config.yml
 !*-config.yaml
+
+platform-spec.zip
