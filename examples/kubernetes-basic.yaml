@@ -1,0 +1,42 @@
+version: "1.0"
+
+metadata:
+  name: "Basic Kubernetes Test"
+  description: "Tests default Kubernetes resources - no deployment needed"
+  tags: ["kubernetes", "example"]
+
+config:
+  fail_fast: false
+  parallel: false
+  timeout: 300
+  kubernetes_namespace: default
+
+tests:
+  kubernetes:
+    namespaces:
+      - name: "Default namespace exists"
+        namespace: default
+        state: present
+
+      - name: "Kube-system namespace exists"
+        namespace: kube-system
+        state: present
+
+    services:
+      - name: "Kubernetes API service exists"
+        service: kubernetes
+        namespace: default
+        type: ClusterIP
+        ports:
+          - port: 443
+            protocol: TCP
+
+      - name: "CoreDNS service exists"
+        service: kube-dns
+        namespace: kube-system
+        type: ClusterIP
+        ports:
+          - port: 53
+            protocol: UDP
+          - port: 53
+            protocol: TCP

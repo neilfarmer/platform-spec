@@ -25,9 +25,11 @@ type SpecMetadata struct {
 
 // SpecConfig contains configuration options
 type SpecConfig struct {
-	FailFast bool `yaml:"fail_fast"`
-	Parallel bool `yaml:"parallel"`
-	Timeout  int  `yaml:"timeout"`
+	FailFast            bool   `yaml:"fail_fast"`
+	Parallel            bool   `yaml:"parallel"`
+	Timeout             int    `yaml:"timeout"`
+	KubernetesContext   string `yaml:"kubernetes_context,omitempty"`
+	KubernetesNamespace string `yaml:"kubernetes_namespace,omitempty"`
 }
 
 // Tests contains all test definitions
@@ -46,6 +48,7 @@ type Tests struct {
 	SystemInfo     []SystemInfoTest     `yaml:"systeminfo"`
 	HTTP           []HTTPTest           `yaml:"http"`
 	Ports          []PortTest           `yaml:"ports"`
+	Kubernetes     KubernetesTests      `yaml:"kubernetes"`
 }
 
 // PackageTest represents a package installation test
@@ -171,6 +174,72 @@ type PortTest struct {
 	Port     int    `yaml:"port"`
 	Protocol string `yaml:"protocol,omitempty"` // tcp or udp (default: tcp)
 	State    string `yaml:"state,omitempty"`    // listening or closed (default: listening)
+}
+
+// Kubernetes test types
+
+// KubernetesPodTest represents a Kubernetes pod test
+type KubernetesPodTest struct {
+	Name      string            `yaml:"name"`
+	Pod       string            `yaml:"pod"`
+	Namespace string            `yaml:"namespace,omitempty"`
+	State     string            `yaml:"state,omitempty"`  // running, pending, succeeded, failed, exists
+	Ready     bool              `yaml:"ready,omitempty"`  // all containers ready
+	Image     string            `yaml:"image,omitempty"`  // container image contains match
+	Labels    map[string]string `yaml:"labels,omitempty"` // validate labels
+}
+
+// KubernetesDeploymentTest represents a Kubernetes deployment test
+type KubernetesDeploymentTest struct {
+	Name          string `yaml:"name"`
+	Deployment    string `yaml:"deployment"`
+	Namespace     string `yaml:"namespace,omitempty"`
+	State         string `yaml:"state,omitempty"`          // available, progressing, exists
+	Replicas      int    `yaml:"replicas,omitempty"`       // desired replicas
+	ReadyReplicas int    `yaml:"ready_replicas,omitempty"` // ready replicas
+	Image         string `yaml:"image,omitempty"`          // container image contains match
+}
+
+// KubernetesServiceTest represents a Kubernetes service test
+type KubernetesServiceTest struct {
+	Name      string                    `yaml:"name"`
+	Service   string                    `yaml:"service"`
+	Namespace string                    `yaml:"namespace,omitempty"`
+	Type      string                    `yaml:"type,omitempty"`     // ClusterIP, NodePort, LoadBalancer, ExternalName
+	Ports     []KubernetesServicePort   `yaml:"ports,omitempty"`    // validate ports
+	Selector  map[string]string         `yaml:"selector,omitempty"` // validate selector labels
+}
+
+// KubernetesServicePort represents a port in a Kubernetes service
+type KubernetesServicePort struct {
+	Port     int    `yaml:"port"`
+	Protocol string `yaml:"protocol,omitempty"` // TCP, UDP, SCTP (default: TCP)
+}
+
+// KubernetesConfigMapTest represents a Kubernetes configmap test
+type KubernetesConfigMapTest struct {
+	Name      string   `yaml:"name"`
+	ConfigMap string   `yaml:"configmap"`
+	Namespace string   `yaml:"namespace,omitempty"`
+	State     string   `yaml:"state,omitempty"`    // present, absent
+	HasKeys   []string `yaml:"has_keys,omitempty"` // keys that must exist in data
+}
+
+// KubernetesNamespaceTest represents a Kubernetes namespace test
+type KubernetesNamespaceTest struct {
+	Name      string            `yaml:"name"`
+	Namespace string            `yaml:"namespace"`
+	State     string            `yaml:"state,omitempty"`  // present, absent
+	Labels    map[string]string `yaml:"labels,omitempty"` // validate labels
+}
+
+// KubernetesTests groups all Kubernetes test types
+type KubernetesTests struct {
+	Pods        []KubernetesPodTest        `yaml:"pods"`
+	Deployments []KubernetesDeploymentTest `yaml:"deployments"`
+	Services    []KubernetesServiceTest    `yaml:"services"`
+	ConfigMaps  []KubernetesConfigMapTest  `yaml:"configmaps"`
+	Namespaces  []KubernetesNamespaceTest  `yaml:"namespaces"`
 }
 
 // ParseSpec parses a YAML spec file
@@ -439,6 +508,152 @@ func (s *Spec) Validate() error {
 		// Validate state
 		if pt.State != "listening" && pt.State != "closed" {
 			return fmt.Errorf("port test '%s': state must be 'listening' or 'closed'", pt.State)
+		}
+	}
+
+	// Validate Kubernetes namespace tests
+	for i := range s.Tests.Kubernetes.Namespaces {
+		nt := &s.Tests.Kubernetes.Namespaces[i]
+		if nt.Name == "" {
+			return fmt.Errorf("kubernetes namespace test %d: name is required", i)
+		}
+		if nt.Namespace == "" {
+			return fmt.Errorf("kubernetes namespace test '%s': namespace is required", nt.Name)
+		}
+		// Set default state
+		if nt.State == "" {
+			nt.State = "present"
+		}
+		// Validate state
+		if nt.State != "present" && nt.State != "absent" {
+			return fmt.Errorf("kubernetes namespace test '%s': state must be 'present' or 'absent'", nt.Name)
+		}
+	}
+
+	// Validate Kubernetes pod tests
+	for i := range s.Tests.Kubernetes.Pods {
+		pt := &s.Tests.Kubernetes.Pods[i]
+		if pt.Name == "" {
+			return fmt.Errorf("kubernetes pod test %d: name is required", i)
+		}
+		if pt.Pod == "" {
+			return fmt.Errorf("kubernetes pod test '%s': pod is required", pt.Name)
+		}
+		// Set default namespace
+		if pt.Namespace == "" {
+			pt.Namespace = s.Config.KubernetesNamespace
+			if pt.Namespace == "" {
+				pt.Namespace = "default"
+			}
+		}
+		// Set default state
+		if pt.State == "" {
+			pt.State = "running"
+		}
+		// Validate state
+		validStates := map[string]bool{"running": true, "pending": true, "succeeded": true, "failed": true, "exists": true}
+		if !validStates[pt.State] {
+			return fmt.Errorf("kubernetes pod test '%s': state must be one of: running, pending, succeeded, failed, exists", pt.Name)
+		}
+	}
+
+	// Validate Kubernetes deployment tests
+	for i := range s.Tests.Kubernetes.Deployments {
+		dt := &s.Tests.Kubernetes.Deployments[i]
+		if dt.Name == "" {
+			return fmt.Errorf("kubernetes deployment test %d: name is required", i)
+		}
+		if dt.Deployment == "" {
+			return fmt.Errorf("kubernetes deployment test '%s': deployment is required", dt.Name)
+		}
+		// Set default namespace
+		if dt.Namespace == "" {
+			dt.Namespace = s.Config.KubernetesNamespace
+			if dt.Namespace == "" {
+				dt.Namespace = "default"
+			}
+		}
+		// Set default state
+		if dt.State == "" {
+			dt.State = "available"
+		}
+		// Validate state
+		validStates := map[string]bool{"available": true, "progressing": true, "exists": true}
+		if !validStates[dt.State] {
+			return fmt.Errorf("kubernetes deployment test '%s': state must be one of: available, progressing, exists", dt.Name)
+		}
+		// Validate replicas
+		if dt.Replicas < 0 {
+			return fmt.Errorf("kubernetes deployment test '%s': replicas must be >= 0", dt.Name)
+		}
+		if dt.ReadyReplicas < 0 {
+			return fmt.Errorf("kubernetes deployment test '%s': ready_replicas must be >= 0", dt.Name)
+		}
+	}
+
+	// Validate Kubernetes service tests
+	for i := range s.Tests.Kubernetes.Services {
+		st := &s.Tests.Kubernetes.Services[i]
+		if st.Name == "" {
+			return fmt.Errorf("kubernetes service test %d: name is required", i)
+		}
+		if st.Service == "" {
+			return fmt.Errorf("kubernetes service test '%s': service is required", st.Name)
+		}
+		// Set default namespace
+		if st.Namespace == "" {
+			st.Namespace = s.Config.KubernetesNamespace
+			if st.Namespace == "" {
+				st.Namespace = "default"
+			}
+		}
+		// Validate service type if specified
+		if st.Type != "" {
+			validTypes := map[string]bool{"ClusterIP": true, "NodePort": true, "LoadBalancer": true, "ExternalName": true}
+			if !validTypes[st.Type] {
+				return fmt.Errorf("kubernetes service test '%s': type must be one of: ClusterIP, NodePort, LoadBalancer, ExternalName", st.Name)
+			}
+		}
+		// Validate ports
+		for j, port := range st.Ports {
+			if port.Port <= 0 || port.Port > 65535 {
+				return fmt.Errorf("kubernetes service test '%s': port %d must be between 1 and 65535", st.Name, j)
+			}
+			// Set default protocol
+			if st.Ports[j].Protocol == "" {
+				st.Ports[j].Protocol = "TCP"
+			}
+			// Validate protocol
+			validProtocols := map[string]bool{"TCP": true, "UDP": true, "SCTP": true}
+			if !validProtocols[st.Ports[j].Protocol] {
+				return fmt.Errorf("kubernetes service test '%s': port protocol must be one of: TCP, UDP, SCTP", st.Name)
+			}
+		}
+	}
+
+	// Validate Kubernetes configmap tests
+	for i := range s.Tests.Kubernetes.ConfigMaps {
+		ct := &s.Tests.Kubernetes.ConfigMaps[i]
+		if ct.Name == "" {
+			return fmt.Errorf("kubernetes configmap test %d: name is required", i)
+		}
+		if ct.ConfigMap == "" {
+			return fmt.Errorf("kubernetes configmap test '%s': configmap is required", ct.Name)
+		}
+		// Set default namespace
+		if ct.Namespace == "" {
+			ct.Namespace = s.Config.KubernetesNamespace
+			if ct.Namespace == "" {
+				ct.Namespace = "default"
+			}
+		}
+		// Set default state
+		if ct.State == "" {
+			ct.State = "present"
+		}
+		// Validate state
+		if ct.State != "present" && ct.State != "absent" {
+			return fmt.Errorf("kubernetes configmap test '%s': state must be 'present' or 'absent'", ct.Name)
 		}
 	}
 

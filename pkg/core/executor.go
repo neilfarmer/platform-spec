@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -170,6 +171,57 @@ func (e *Executor) Execute(ctx context.Context) (*TestResults, error) {
 
 	for _, test := range e.spec.Tests.Ports {
 		result := e.executePortTest(ctx, test)
+		results.Results = append(results.Results, result)
+
+		// Check fail-fast
+		if e.spec.Config.FailFast && result.Status == StatusFail {
+			break
+		}
+	}
+
+	// Execute Kubernetes tests
+	for _, test := range e.spec.Tests.Kubernetes.Namespaces {
+		result := e.executeKubernetesNamespaceTest(ctx, test)
+		results.Results = append(results.Results, result)
+
+		// Check fail-fast
+		if e.spec.Config.FailFast && result.Status == StatusFail {
+			break
+		}
+	}
+
+	for _, test := range e.spec.Tests.Kubernetes.Pods {
+		result := e.executeKubernetesPodTest(ctx, test)
+		results.Results = append(results.Results, result)
+
+		// Check fail-fast
+		if e.spec.Config.FailFast && result.Status == StatusFail {
+			break
+		}
+	}
+
+	for _, test := range e.spec.Tests.Kubernetes.Deployments {
+		result := e.executeKubernetesDeploymentTest(ctx, test)
+		results.Results = append(results.Results, result)
+
+		// Check fail-fast
+		if e.spec.Config.FailFast && result.Status == StatusFail {
+			break
+		}
+	}
+
+	for _, test := range e.spec.Tests.Kubernetes.Services {
+		result := e.executeKubernetesServiceTest(ctx, test)
+		results.Results = append(results.Results, result)
+
+		// Check fail-fast
+		if e.spec.Config.FailFast && result.Status == StatusFail {
+			break
+		}
+	}
+
+	for _, test := range e.spec.Tests.Kubernetes.ConfigMaps {
+		result := e.executeKubernetesConfigMapTest(ctx, test)
 		results.Results = append(results.Results, result)
 
 		// Check fail-fast
@@ -1475,6 +1527,621 @@ func (e *Executor) executeHTTPTest(ctx context.Context, test HTTPTest) Result {
 		result.Message += fmt.Sprintf(" with all expected content (%d strings)", len(test.Contains))
 	}
 
+	result.Duration = time.Since(start)
+	return result
+}
+// JSON helper functions for navigating kubectl JSON output
+
+// getNestedString navigates nested maps to extract a string value
+func getNestedString(m map[string]interface{}, keys ...string) (string, bool) {
+	current := m
+	for i, key := range keys {
+		if i == len(keys)-1 {
+			if val, ok := current[key].(string); ok {
+				return val, true
+			}
+			return "", false
+		}
+		if next, ok := current[key].(map[string]interface{}); ok {
+			current = next
+		} else {
+			return "", false
+		}
+	}
+	return "", false
+}
+
+// getNestedSlice navigates nested maps to extract a slice value
+func getNestedSlice(m map[string]interface{}, keys ...string) ([]interface{}, bool) {
+	current := m
+	for i, key := range keys {
+		if i == len(keys)-1 {
+			if val, ok := current[key].([]interface{}); ok {
+				return val, true
+			}
+			return nil, false
+		}
+		if next, ok := current[key].(map[string]interface{}); ok {
+			current = next
+		} else {
+			return nil, false
+		}
+	}
+	return nil, false
+}
+
+// getNestedMap navigates nested maps to extract a map[string]string value
+func getNestedMap(m map[string]interface{}, keys ...string) (map[string]string, bool) {
+	current := m
+	for i, key := range keys {
+		if i == len(keys)-1 {
+			if val, ok := current[key].(map[string]interface{}); ok {
+				result := make(map[string]string)
+				for k, v := range val {
+					if strVal, ok := v.(string); ok {
+						result[k] = strVal
+					}
+				}
+				return result, true
+			}
+			return nil, false
+		}
+		if next, ok := current[key].(map[string]interface{}); ok {
+			current = next
+		} else {
+			return nil, false
+		}
+	}
+	return nil, false
+}
+
+// getNestedFloat64 navigates nested maps to extract a float64 value (for numbers)
+func getNestedFloat64(m map[string]interface{}, keys ...string) (float64, bool) {
+	current := m
+	for i, key := range keys {
+		if i == len(keys)-1 {
+			if val, ok := current[key].(float64); ok {
+				return val, true
+			}
+			return 0, false
+		}
+		if next, ok := current[key].(map[string]interface{}); ok {
+			current = next
+		} else {
+			return 0, false
+		}
+	}
+	return 0, false
+}
+
+// Kubernetes test execution methods
+
+// executeKubernetesNamespaceTest executes a Kubernetes namespace test
+func (e *Executor) executeKubernetesNamespaceTest(ctx context.Context, test KubernetesNamespaceTest) Result {
+	start := time.Now()
+	result := Result{
+		Name:    test.Name,
+		Status:  StatusPass,
+		Details: make(map[string]interface{}),
+	}
+
+	// Build kubectl command
+	cmd := fmt.Sprintf("kubectl get namespace %s -o json 2>&1", test.Namespace)
+	stdout, stderr, exitCode, err := e.provider.ExecuteCommand(ctx, cmd)
+
+	if err != nil {
+		result.Status = StatusError
+		result.Message = fmt.Sprintf("Error checking namespace %s: %v", test.Namespace, err)
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	// Handle "not found" case
+	exists := (exitCode == 0)
+	if exitCode == 1 && strings.Contains(stderr, "not found") {
+		exists = false
+	} else if exitCode != 0 && exitCode != 1 {
+		result.Status = StatusError
+		result.Message = fmt.Sprintf("kubectl error: %s", strings.TrimSpace(stderr))
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	// Check state
+	if test.State == "present" && !exists {
+		result.Status = StatusFail
+		result.Message = fmt.Sprintf("Namespace %s not found", test.Namespace)
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	if test.State == "absent" && exists {
+		result.Status = StatusFail
+		result.Message = fmt.Sprintf("Namespace %s exists but should be absent", test.Namespace)
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	// If expecting absent and it is absent, we're done
+	if test.State == "absent" {
+		result.Message = fmt.Sprintf("Namespace %s is absent", test.Namespace)
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	// Parse JSON for label validation
+	if len(test.Labels) > 0 {
+		var namespace map[string]interface{}
+		if err := json.Unmarshal([]byte(stdout), &namespace); err != nil {
+			result.Status = StatusError
+			result.Message = fmt.Sprintf("Failed to parse namespace JSON: %v", err)
+			result.Duration = time.Since(start)
+			return result
+		}
+
+		labels, _ := getNestedMap(namespace, "metadata", "labels")
+		for key, expectedVal := range test.Labels {
+			if actualVal, ok := labels[key]; !ok || actualVal != expectedVal {
+				result.Status = StatusFail
+				result.Message = fmt.Sprintf("Namespace %s label %s=%s not found (actual: %v)", test.Namespace, key, expectedVal, actualVal)
+				result.Duration = time.Since(start)
+				return result
+			}
+		}
+	}
+
+	result.Message = fmt.Sprintf("Namespace %s exists", test.Namespace)
+	result.Duration = time.Since(start)
+	return result
+}
+
+// executeKubernetesPodTest executes a Kubernetes pod test
+func (e *Executor) executeKubernetesPodTest(ctx context.Context, test KubernetesPodTest) Result {
+	start := time.Now()
+	result := Result{
+		Name:    test.Name,
+		Status:  StatusPass,
+		Details: make(map[string]interface{}),
+	}
+
+	// Build kubectl command
+	cmd := fmt.Sprintf("kubectl get pod %s -n %s -o json 2>&1", test.Pod, test.Namespace)
+	stdout, stderr, exitCode, err := e.provider.ExecuteCommand(ctx, cmd)
+
+	if err != nil {
+		result.Status = StatusError
+		result.Message = fmt.Sprintf("Error checking pod %s: %v", test.Pod, err)
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	// Handle not found
+	if exitCode == 1 && strings.Contains(stderr, "not found") {
+		result.Status = StatusFail
+		result.Message = fmt.Sprintf("Pod %s not found in namespace %s", test.Pod, test.Namespace)
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	if exitCode != 0 {
+		result.Status = StatusError
+		result.Message = fmt.Sprintf("kubectl error: %s", strings.TrimSpace(stderr))
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	// Parse JSON
+	var pod map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &pod); err != nil {
+		result.Status = StatusError
+		result.Message = fmt.Sprintf("Failed to parse pod JSON: %v", err)
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	// Extract status phase
+	phase, _ := getNestedString(pod, "status", "phase")
+	result.Details["phase"] = phase
+	result.Details["namespace"] = test.Namespace
+
+	// Check state
+	if test.State != "exists" {
+		expectedPhase := strings.Title(strings.ToLower(test.State)) // "running" -> "Running"
+		if phase != expectedPhase {
+			result.Status = StatusFail
+			result.Message = fmt.Sprintf("Pod %s phase is %s, expected %s", test.Pod, phase, expectedPhase)
+			result.Duration = time.Since(start)
+			return result
+		}
+	}
+
+	// Check ready if specified
+	if test.Ready {
+		containerStatuses, _ := getNestedSlice(pod, "status", "containerStatuses")
+		allReady := true
+		if len(containerStatuses) == 0 {
+			allReady = false
+		}
+		for _, cs := range containerStatuses {
+			if csMap, ok := cs.(map[string]interface{}); ok {
+				if ready, ok := csMap["ready"].(bool); ok && !ready {
+					allReady = false
+					break
+				}
+			}
+		}
+		if !allReady {
+			result.Status = StatusFail
+			result.Message = fmt.Sprintf("Pod %s containers not all ready", test.Pod)
+			result.Duration = time.Since(start)
+			return result
+		}
+		result.Details["ready"] = "true"
+	}
+
+	// Check image if specified
+	if test.Image != "" {
+		containers, _ := getNestedSlice(pod, "spec", "containers")
+		imageFound := false
+		for _, c := range containers {
+			if cMap, ok := c.(map[string]interface{}); ok {
+				if image, ok := cMap["image"].(string); ok && strings.Contains(image, test.Image) {
+					imageFound = true
+					result.Details["image"] = image
+					break
+				}
+			}
+		}
+		if !imageFound {
+			result.Status = StatusFail
+			result.Message = fmt.Sprintf("Pod %s does not contain image %s", test.Pod, test.Image)
+			result.Duration = time.Since(start)
+			return result
+		}
+	}
+
+	// Check labels if specified
+	if len(test.Labels) > 0 {
+		labels, _ := getNestedMap(pod, "metadata", "labels")
+		for key, expectedVal := range test.Labels {
+			if actualVal, ok := labels[key]; !ok || actualVal != expectedVal {
+				result.Status = StatusFail
+				result.Message = fmt.Sprintf("Pod %s label %s=%s not found (actual: %v)", test.Pod, key, expectedVal, actualVal)
+				result.Duration = time.Since(start)
+				return result
+			}
+		}
+	}
+
+	result.Message = fmt.Sprintf("Pod %s is %s", test.Pod, strings.ToLower(phase))
+	result.Duration = time.Since(start)
+	return result
+}
+
+// executeKubernetesDeploymentTest executes a Kubernetes deployment test
+func (e *Executor) executeKubernetesDeploymentTest(ctx context.Context, test KubernetesDeploymentTest) Result {
+	start := time.Now()
+	result := Result{
+		Name:    test.Name,
+		Status:  StatusPass,
+		Details: make(map[string]interface{}),
+	}
+
+	// Build kubectl command
+	cmd := fmt.Sprintf("kubectl get deployment %s -n %s -o json 2>&1", test.Deployment, test.Namespace)
+	stdout, stderr, exitCode, err := e.provider.ExecuteCommand(ctx, cmd)
+
+	if err != nil {
+		result.Status = StatusError
+		result.Message = fmt.Sprintf("Error checking deployment %s: %v", test.Deployment, err)
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	// Handle not found
+	if exitCode == 1 && strings.Contains(stderr, "not found") {
+		result.Status = StatusFail
+		result.Message = fmt.Sprintf("Deployment %s not found in namespace %s", test.Deployment, test.Namespace)
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	if exitCode != 0 {
+		result.Status = StatusError
+		result.Message = fmt.Sprintf("kubectl error: %s", strings.TrimSpace(stderr))
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	// Parse JSON
+	var deployment map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &deployment); err != nil {
+		result.Status = StatusError
+		result.Message = fmt.Sprintf("Failed to parse deployment JSON: %v", err)
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	result.Details["namespace"] = test.Namespace
+
+	// Check state if not "exists"
+	if test.State != "exists" {
+		conditions, _ := getNestedSlice(deployment, "status", "conditions")
+		isAvailable := false
+		isProgressing := false
+
+		for _, cond := range conditions {
+			if condMap, ok := cond.(map[string]interface{}); ok {
+				condType, _ := condMap["type"].(string)
+				condStatus, _ := condMap["status"].(string)
+
+				if condType == "Available" && condStatus == "True" {
+					isAvailable = true
+				}
+				if condType == "Progressing" && condStatus == "True" {
+					isProgressing = true
+				}
+			}
+		}
+
+		if test.State == "available" && !isAvailable {
+			result.Status = StatusFail
+			result.Message = fmt.Sprintf("Deployment %s is not available", test.Deployment)
+			result.Duration = time.Since(start)
+			return result
+		}
+
+		if test.State == "progressing" && !isProgressing {
+			result.Status = StatusFail
+			result.Message = fmt.Sprintf("Deployment %s is not progressing", test.Deployment)
+			result.Duration = time.Since(start)
+			return result
+		}
+
+		result.Details["available"] = isAvailable
+		result.Details["progressing"] = isProgressing
+	}
+
+	// Check replicas if specified
+	if test.Replicas > 0 {
+		replicas, _ := getNestedFloat64(deployment, "spec", "replicas")
+		if int(replicas) != test.Replicas {
+			result.Status = StatusFail
+			result.Message = fmt.Sprintf("Deployment %s has %d replicas, expected %d", test.Deployment, int(replicas), test.Replicas)
+			result.Duration = time.Since(start)
+			return result
+		}
+		result.Details["replicas"] = test.Replicas
+	}
+
+	// Check ready replicas if specified
+	if test.ReadyReplicas > 0 {
+		readyReplicas, _ := getNestedFloat64(deployment, "status", "readyReplicas")
+		if int(readyReplicas) != test.ReadyReplicas {
+			result.Status = StatusFail
+			result.Message = fmt.Sprintf("Deployment %s has %d ready replicas, expected %d", test.Deployment, int(readyReplicas), test.ReadyReplicas)
+			result.Duration = time.Since(start)
+			return result
+		}
+		result.Details["readyReplicas"] = test.ReadyReplicas
+	}
+
+	// Check image if specified
+	if test.Image != "" {
+		containers, _ := getNestedSlice(deployment, "spec", "template", "spec", "containers")
+		imageFound := false
+		for _, c := range containers {
+			if cMap, ok := c.(map[string]interface{}); ok {
+				if image, ok := cMap["image"].(string); ok && strings.Contains(image, test.Image) {
+					imageFound = true
+					result.Details["image"] = image
+					break
+				}
+			}
+		}
+		if !imageFound {
+			result.Status = StatusFail
+			result.Message = fmt.Sprintf("Deployment %s does not contain image %s", test.Deployment, test.Image)
+			result.Duration = time.Since(start)
+			return result
+		}
+	}
+
+	result.Message = fmt.Sprintf("Deployment %s is %s", test.Deployment, test.State)
+	result.Duration = time.Since(start)
+	return result
+}
+
+// executeKubernetesServiceTest executes a Kubernetes service test
+func (e *Executor) executeKubernetesServiceTest(ctx context.Context, test KubernetesServiceTest) Result {
+	start := time.Now()
+	result := Result{
+		Name:    test.Name,
+		Status:  StatusPass,
+		Details: make(map[string]interface{}),
+	}
+
+	// Build kubectl command
+	cmd := fmt.Sprintf("kubectl get service %s -n %s -o json 2>&1", test.Service, test.Namespace)
+	stdout, stderr, exitCode, err := e.provider.ExecuteCommand(ctx, cmd)
+
+	if err != nil {
+		result.Status = StatusError
+		result.Message = fmt.Sprintf("Error checking service %s: %v", test.Service, err)
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	// Handle not found
+	if exitCode == 1 && strings.Contains(stderr, "not found") {
+		result.Status = StatusFail
+		result.Message = fmt.Sprintf("Service %s not found in namespace %s", test.Service, test.Namespace)
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	if exitCode != 0 {
+		result.Status = StatusError
+		result.Message = fmt.Sprintf("kubectl error: %s", strings.TrimSpace(stderr))
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	// Parse JSON
+	var service map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &service); err != nil {
+		result.Status = StatusError
+		result.Message = fmt.Sprintf("Failed to parse service JSON: %v", err)
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	result.Details["namespace"] = test.Namespace
+
+	// Check service type if specified
+	if test.Type != "" {
+		svcType, _ := getNestedString(service, "spec", "type")
+		if svcType != test.Type {
+			result.Status = StatusFail
+			result.Message = fmt.Sprintf("Service %s type is %s, expected %s", test.Service, svcType, test.Type)
+			result.Duration = time.Since(start)
+			return result
+		}
+		result.Details["type"] = svcType
+	}
+
+	// Check ports if specified
+	if len(test.Ports) > 0 {
+		servicePorts, _ := getNestedSlice(service, "spec", "ports")
+		
+		for _, expectedPort := range test.Ports {
+			portFound := false
+			for _, sp := range servicePorts {
+				if spMap, ok := sp.(map[string]interface{}); ok {
+					port, _ := spMap["port"].(float64)
+					protocol, _ := spMap["protocol"].(string)
+					
+					if int(port) == expectedPort.Port && protocol == expectedPort.Protocol {
+						portFound = true
+						break
+					}
+				}
+			}
+			if !portFound {
+				result.Status = StatusFail
+				result.Message = fmt.Sprintf("Service %s does not have port %d/%s", test.Service, expectedPort.Port, expectedPort.Protocol)
+				result.Duration = time.Since(start)
+				return result
+			}
+		}
+	}
+
+	// Check selector if specified
+	if len(test.Selector) > 0 {
+		selector, _ := getNestedMap(service, "spec", "selector")
+		for key, expectedVal := range test.Selector {
+			if actualVal, ok := selector[key]; !ok || actualVal != expectedVal {
+				result.Status = StatusFail
+				result.Message = fmt.Sprintf("Service %s selector %s=%s not found (actual: %v)", test.Service, key, expectedVal, actualVal)
+				result.Duration = time.Since(start)
+				return result
+			}
+		}
+	}
+
+	result.Message = fmt.Sprintf("Service %s exists", test.Service)
+	if test.Type != "" {
+		result.Message = fmt.Sprintf("Service %s is type %s", test.Service, test.Type)
+	}
+	result.Duration = time.Since(start)
+	return result
+}
+
+// executeKubernetesConfigMapTest executes a Kubernetes configmap test
+func (e *Executor) executeKubernetesConfigMapTest(ctx context.Context, test KubernetesConfigMapTest) Result {
+	start := time.Now()
+	result := Result{
+		Name:    test.Name,
+		Status:  StatusPass,
+		Details: make(map[string]interface{}),
+	}
+
+	// Build kubectl command
+	cmd := fmt.Sprintf("kubectl get configmap %s -n %s -o json 2>&1", test.ConfigMap, test.Namespace)
+	stdout, stderr, exitCode, err := e.provider.ExecuteCommand(ctx, cmd)
+
+	if err != nil {
+		result.Status = StatusError
+		result.Message = fmt.Sprintf("Error checking configmap %s: %v", test.ConfigMap, err)
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	// Handle "not found" case
+	exists := (exitCode == 0)
+	if exitCode == 1 && strings.Contains(stderr, "not found") {
+		exists = false
+	} else if exitCode != 0 && exitCode != 1 {
+		result.Status = StatusError
+		result.Message = fmt.Sprintf("kubectl error: %s", strings.TrimSpace(stderr))
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	// Check state
+	if test.State == "present" && !exists {
+		result.Status = StatusFail
+		result.Message = fmt.Sprintf("ConfigMap %s not found in namespace %s", test.ConfigMap, test.Namespace)
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	if test.State == "absent" && exists {
+		result.Status = StatusFail
+		result.Message = fmt.Sprintf("ConfigMap %s exists but should be absent", test.ConfigMap)
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	// If expecting absent and it is absent, we're done
+	if test.State == "absent" {
+		result.Message = fmt.Sprintf("ConfigMap %s is absent", test.ConfigMap)
+		result.Duration = time.Since(start)
+		return result
+	}
+
+	result.Details["namespace"] = test.Namespace
+
+	// Check keys if specified
+	if len(test.HasKeys) > 0 {
+		var configmap map[string]interface{}
+		if err := json.Unmarshal([]byte(stdout), &configmap); err != nil {
+			result.Status = StatusError
+			result.Message = fmt.Sprintf("Failed to parse configmap JSON: %v", err)
+			result.Duration = time.Since(start)
+			return result
+		}
+
+		data, _ := getNestedMap(configmap, "data")
+		var missingKeys []string
+		for _, key := range test.HasKeys {
+			if _, ok := data[key]; !ok {
+				missingKeys = append(missingKeys, key)
+			}
+		}
+
+		if len(missingKeys) > 0 {
+			result.Status = StatusFail
+			result.Message = fmt.Sprintf("ConfigMap %s missing keys: %s", test.ConfigMap, strings.Join(missingKeys, ", "))
+			result.Duration = time.Since(start)
+			return result
+		}
+	}
+
+	result.Message = fmt.Sprintf("ConfigMap %s exists", test.ConfigMap)
+	if len(test.HasKeys) > 0 {
+		result.Message = fmt.Sprintf("ConfigMap %s exists with all required keys", test.ConfigMap)
+	}
 	result.Duration = time.Since(start)
 	return result
 }
