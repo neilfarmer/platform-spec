@@ -233,13 +233,96 @@ type KubernetesNamespaceTest struct {
 	Labels    map[string]string `yaml:"labels,omitempty"` // validate labels
 }
 
+// KubernetesNodeTest represents a Kubernetes node test
+type KubernetesNodeTest struct {
+	Name       string            `yaml:"name"`
+	Count      int               `yaml:"count,omitempty"`       // Exact node count
+	MinCount   int               `yaml:"min_count,omitempty"`   // Minimum node count
+	MinReady   int               `yaml:"min_ready,omitempty"`   // Minimum ready nodes
+	MinVersion string            `yaml:"min_version,omitempty"` // Minimum kubelet version (e.g., "v1.28.0")
+	Labels     map[string]string `yaml:"labels,omitempty"`      // Label selector for filtering nodes
+}
+
+// KubernetesCRDTest represents a Kubernetes CustomResourceDefinition test
+type KubernetesCRDTest struct {
+	Name  string `yaml:"name"`
+	CRD   string `yaml:"crd"`                 // CRD name (e.g., "certificates.cert-manager.io")
+	State string `yaml:"state,omitempty"`     // present, absent
+}
+
+// KubernetesHelmTest represents a Kubernetes Helm release test
+type KubernetesHelmTest struct {
+	Name          string `yaml:"name"`
+	Release       string `yaml:"release"`                     // Helm release name
+	Namespace     string `yaml:"namespace,omitempty"`         // Namespace where release is installed
+	State         string `yaml:"state,omitempty"`             // deployed, failed, pending-install, pending-upgrade, etc.
+	AllPodsReady  bool   `yaml:"all_pods_ready,omitempty"`    // Check all pods from release are ready
+}
+
+// KubernetesStorageClassTest represents a Kubernetes StorageClass test
+type KubernetesStorageClassTest struct {
+	Name         string `yaml:"name"`
+	StorageClass string `yaml:"storageclass"`        // StorageClass name (e.g., "fast-ssd", "standard")
+	State        string `yaml:"state,omitempty"`     // present, absent
+}
+
+// KubernetesSecretTest represents a Kubernetes Secret test
+type KubernetesSecretTest struct {
+	Name      string   `yaml:"name"`
+	Secret    string   `yaml:"secret"`              // Secret name
+	Namespace string   `yaml:"namespace,omitempty"` // Namespace (default: "default")
+	State     string   `yaml:"state,omitempty"`     // present, absent (default: "present")
+	Type      string   `yaml:"type,omitempty"`      // Secret type (Opaque, kubernetes.io/tls, etc.)
+	HasKeys   []string `yaml:"has_keys,omitempty"`  // Keys that must exist in data
+}
+
+// KubernetesIngressTest represents a Kubernetes Ingress test
+type KubernetesIngressTest struct {
+	Name         string   `yaml:"name"`
+	Ingress      string   `yaml:"ingress"`                // Ingress name
+	Namespace    string   `yaml:"namespace,omitempty"`    // Namespace (default: "default")
+	State        string   `yaml:"state,omitempty"`        // present, absent (default: "present")
+	Hosts        []string `yaml:"hosts,omitempty"`        // Expected hosts
+	TLS          bool     `yaml:"tls,omitempty"`          // Check if TLS is configured
+	IngressClass string   `yaml:"ingress_class,omitempty"` // Expected ingress class
+}
+
+// KubernetesPVCTest represents a Kubernetes PersistentVolumeClaim test
+type KubernetesPVCTest struct {
+	Name         string `yaml:"name"`
+	PVC          string `yaml:"pvc"`                    // PVC name
+	Namespace    string `yaml:"namespace,omitempty"`    // Namespace (default: "default")
+	State        string `yaml:"state,omitempty"`        // present, absent (default: "present")
+	Status       string `yaml:"status,omitempty"`       // Bound, Pending, Lost (default: not checked)
+	StorageClass string `yaml:"storage_class,omitempty"` // Expected storage class
+	MinCapacity  string `yaml:"min_capacity,omitempty"`  // Minimum capacity (e.g., "100Gi")
+}
+
+// KubernetesStatefulSetTest represents a Kubernetes StatefulSet test
+type KubernetesStatefulSetTest struct {
+	Name          string `yaml:"name"`
+	StatefulSet   string `yaml:"statefulset"`           // StatefulSet name
+	Namespace     string `yaml:"namespace,omitempty"`   // Namespace (default: "default")
+	State         string `yaml:"state,omitempty"`       // available, exists (default: "available")
+	Replicas      int    `yaml:"replicas,omitempty"`    // Exact replica count
+	ReadyReplicas int    `yaml:"ready_replicas,omitempty"` // Exact ready replica count
+}
+
 // KubernetesTests groups all Kubernetes test types
 type KubernetesTests struct {
-	Pods        []KubernetesPodTest        `yaml:"pods"`
-	Deployments []KubernetesDeploymentTest `yaml:"deployments"`
-	Services    []KubernetesServiceTest    `yaml:"services"`
-	ConfigMaps  []KubernetesConfigMapTest  `yaml:"configmaps"`
-	Namespaces  []KubernetesNamespaceTest  `yaml:"namespaces"`
+	Pods           []KubernetesPodTest           `yaml:"pods"`
+	Deployments    []KubernetesDeploymentTest    `yaml:"deployments"`
+	Services       []KubernetesServiceTest       `yaml:"services"`
+	ConfigMaps     []KubernetesConfigMapTest     `yaml:"configmaps"`
+	Namespaces     []KubernetesNamespaceTest     `yaml:"namespaces"`
+	Nodes          []KubernetesNodeTest          `yaml:"nodes"`
+	CRDs           []KubernetesCRDTest           `yaml:"crds"`
+	Helm           []KubernetesHelmTest          `yaml:"helm"`
+	StorageClasses []KubernetesStorageClassTest  `yaml:"storageclasses"`
+	Secrets        []KubernetesSecretTest        `yaml:"secrets"`
+	Ingress        []KubernetesIngressTest       `yaml:"ingress"`
+	PVCs           []KubernetesPVCTest           `yaml:"pvcs"`
+	StatefulSets   []KubernetesStatefulSetTest   `yaml:"statefulsets"`
 }
 
 // ParseSpec parses a YAML spec file
@@ -654,6 +737,228 @@ func (s *Spec) Validate() error {
 		// Validate state
 		if ct.State != "present" && ct.State != "absent" {
 			return fmt.Errorf("kubernetes configmap test '%s': state must be 'present' or 'absent'", ct.Name)
+		}
+	}
+
+	// Validate Kubernetes node tests
+	for i := range s.Tests.Kubernetes.Nodes {
+		nt := &s.Tests.Kubernetes.Nodes[i]
+		if nt.Name == "" {
+			return fmt.Errorf("kubernetes node test %d: name is required", i)
+		}
+		// At least one check must be specified
+		if nt.Count == 0 && nt.MinCount == 0 && nt.MinReady == 0 && nt.MinVersion == "" {
+			return fmt.Errorf("kubernetes node test '%s': at least one of count, min_count, min_ready, or min_version is required", nt.Name)
+		}
+		// Validate count values are non-negative
+		if nt.Count < 0 {
+			return fmt.Errorf("kubernetes node test '%s': count must be non-negative", nt.Name)
+		}
+		if nt.MinCount < 0 {
+			return fmt.Errorf("kubernetes node test '%s': min_count must be non-negative", nt.Name)
+		}
+		if nt.MinReady < 0 {
+			return fmt.Errorf("kubernetes node test '%s': min_ready must be non-negative", nt.Name)
+		}
+	}
+
+	// Validate Kubernetes CRD tests
+	for i := range s.Tests.Kubernetes.CRDs {
+		ct := &s.Tests.Kubernetes.CRDs[i]
+		if ct.Name == "" {
+			return fmt.Errorf("kubernetes crd test %d: name is required", i)
+		}
+		if ct.CRD == "" {
+			return fmt.Errorf("kubernetes crd test '%s': crd is required", ct.Name)
+		}
+		// Set default state
+		if ct.State == "" {
+			ct.State = "present"
+		}
+		// Validate state
+		if ct.State != "present" && ct.State != "absent" {
+			return fmt.Errorf("kubernetes crd test '%s': state must be 'present' or 'absent'", ct.Name)
+		}
+	}
+
+	// Validate Kubernetes Helm tests
+	for i := range s.Tests.Kubernetes.Helm {
+		ht := &s.Tests.Kubernetes.Helm[i]
+		if ht.Name == "" {
+			return fmt.Errorf("kubernetes helm test %d: name is required", i)
+		}
+		if ht.Release == "" {
+			return fmt.Errorf("kubernetes helm test '%s': release is required", ht.Name)
+		}
+		// Set default namespace
+		if ht.Namespace == "" {
+			ht.Namespace = s.Config.KubernetesNamespace
+			if ht.Namespace == "" {
+				ht.Namespace = "default"
+			}
+		}
+		// Set default state
+		if ht.State == "" {
+			ht.State = "deployed"
+		}
+		// Validate state
+		validStates := map[string]bool{
+			"deployed":        true,
+			"failed":          true,
+			"pending-install": true,
+			"pending-upgrade": true,
+			"pending-rollback": true,
+			"superseded":      true,
+			"uninstalling":    true,
+			"uninstalled":     true,
+		}
+		if !validStates[ht.State] {
+			return fmt.Errorf("kubernetes helm test '%s': state must be one of: deployed, failed, pending-install, pending-upgrade, pending-rollback, superseded, uninstalling, uninstalled", ht.Name)
+		}
+	}
+
+	// Validate Kubernetes StorageClass tests
+	for i := range s.Tests.Kubernetes.StorageClasses {
+		st := &s.Tests.Kubernetes.StorageClasses[i]
+		if st.Name == "" {
+			return fmt.Errorf("kubernetes storageclass test %d: name is required", i)
+		}
+		if st.StorageClass == "" {
+			return fmt.Errorf("kubernetes storageclass test '%s': storageclass is required", st.Name)
+		}
+		// Set default state
+		if st.State == "" {
+			st.State = "present"
+		}
+		// Validate state
+		if st.State != "present" && st.State != "absent" {
+			return fmt.Errorf("kubernetes storageclass test '%s': state must be 'present' or 'absent'", st.Name)
+		}
+	}
+
+	// Validate Kubernetes Secret tests
+	for i := range s.Tests.Kubernetes.Secrets {
+		st := &s.Tests.Kubernetes.Secrets[i]
+		if st.Name == "" {
+			return fmt.Errorf("kubernetes secret test %d: name is required", i)
+		}
+		if st.Secret == "" {
+			return fmt.Errorf("kubernetes secret test '%s': secret is required", st.Name)
+		}
+		// Set default namespace
+		if st.Namespace == "" {
+			st.Namespace = "default"
+		}
+		// Set default state
+		if st.State == "" {
+			st.State = "present"
+		}
+		// Validate state
+		if st.State != "present" && st.State != "absent" {
+			return fmt.Errorf("kubernetes secret test '%s': state must be 'present' or 'absent'", st.Name)
+		}
+		// Validate secret type if specified
+		if st.Type != "" {
+			validTypes := map[string]bool{
+				"Opaque":                                 true,
+				"kubernetes.io/service-account-token":    true,
+				"kubernetes.io/dockercfg":                true,
+				"kubernetes.io/dockerconfigjson":         true,
+				"kubernetes.io/basic-auth":               true,
+				"kubernetes.io/ssh-auth":                 true,
+				"kubernetes.io/tls":                      true,
+				"bootstrap.kubernetes.io/token":          true,
+			}
+			if !validTypes[st.Type] {
+				return fmt.Errorf("kubernetes secret test '%s': type must be one of: Opaque, kubernetes.io/service-account-token, kubernetes.io/dockercfg, kubernetes.io/dockerconfigjson, kubernetes.io/basic-auth, kubernetes.io/ssh-auth, kubernetes.io/tls, bootstrap.kubernetes.io/token", st.Name)
+			}
+		}
+	}
+
+	// Validate Kubernetes Ingress tests
+	for i := range s.Tests.Kubernetes.Ingress {
+		it := &s.Tests.Kubernetes.Ingress[i]
+		if it.Name == "" {
+			return fmt.Errorf("kubernetes ingress test %d: name is required", i)
+		}
+		if it.Ingress == "" {
+			return fmt.Errorf("kubernetes ingress test '%s': ingress is required", it.Name)
+		}
+		// Set default namespace
+		if it.Namespace == "" {
+			it.Namespace = "default"
+		}
+		// Set default state
+		if it.State == "" {
+			it.State = "present"
+		}
+		// Validate state
+		if it.State != "present" && it.State != "absent" {
+			return fmt.Errorf("kubernetes ingress test '%s': state must be 'present' or 'absent'", it.Name)
+		}
+	}
+
+	// Validate Kubernetes PVC tests
+	for i := range s.Tests.Kubernetes.PVCs {
+		pt := &s.Tests.Kubernetes.PVCs[i]
+		if pt.Name == "" {
+			return fmt.Errorf("kubernetes pvc test %d: name is required", i)
+		}
+		if pt.PVC == "" {
+			return fmt.Errorf("kubernetes pvc test '%s': pvc is required", pt.Name)
+		}
+		// Set default namespace
+		if pt.Namespace == "" {
+			pt.Namespace = "default"
+		}
+		// Set default state
+		if pt.State == "" {
+			pt.State = "present"
+		}
+		// Validate state
+		if pt.State != "present" && pt.State != "absent" {
+			return fmt.Errorf("kubernetes pvc test '%s': state must be 'present' or 'absent'", pt.Name)
+		}
+		// Validate status if specified
+		if pt.Status != "" {
+			validStatuses := map[string]bool{
+				"Bound":   true,
+				"Pending": true,
+				"Lost":    true,
+			}
+			if !validStatuses[pt.Status] {
+				return fmt.Errorf("kubernetes pvc test '%s': status must be 'Bound', 'Pending', or 'Lost'", pt.Name)
+			}
+		}
+	}
+
+	// Validate Kubernetes StatefulSet tests
+	for i := range s.Tests.Kubernetes.StatefulSets {
+		st := &s.Tests.Kubernetes.StatefulSets[i]
+		if st.Name == "" {
+			return fmt.Errorf("kubernetes statefulset test %d: name is required", i)
+		}
+		if st.StatefulSet == "" {
+			return fmt.Errorf("kubernetes statefulset test '%s': statefulset is required", st.Name)
+		}
+		// Set default namespace
+		if st.Namespace == "" {
+			st.Namespace = "default"
+		}
+		// Set default state
+		if st.State == "" {
+			st.State = "available"
+		}
+		// Validate state
+		if st.State != "available" && st.State != "exists" {
+			return fmt.Errorf("kubernetes statefulset test '%s': state must be 'available' or 'exists'", st.Name)
+		}
+		// Validate replica counts
+		if st.Replicas < 0 {
+			return fmt.Errorf("kubernetes statefulset test '%s': replicas must be >= 0", st.Name)
+		}
+		if st.ReadyReplicas < 0 {
+			return fmt.Errorf("kubernetes statefulset test '%s': ready_replicas must be >= 0", st.Name)
 		}
 	}
 

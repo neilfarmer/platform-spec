@@ -1,4 +1,4 @@
-package assertions
+package system
 
 import (
 	"context"
@@ -9,8 +9,8 @@ import (
 	"github.com/neilfarmer/platform-spec/pkg/core"
 )
 
-// CheckFile checks file/directory properties
-func CheckFile(ctx context.Context, executor CommandExecutor, test core.FileTest) core.Result {
+// executeFileTest executes a file test
+func executeFileTest(ctx context.Context, provider core.Provider, test core.FileTest) core.Result {
 	start := time.Now()
 	result := core.Result{
 		Name:    test.Name,
@@ -18,8 +18,8 @@ func CheckFile(ctx context.Context, executor CommandExecutor, test core.FileTest
 		Details: make(map[string]interface{}),
 	}
 
-	// Check if path exists and get its type
-	stdout, _, exitCode, err := executor.ExecuteCommand(ctx, fmt.Sprintf("stat -c '%%F:%%U:%%G:%%a' %s 2>/dev/null || echo 'notfound'", test.Path))
+	// Implementation moved from assertions/file.go
+	stdout, _, exitCode, err := provider.ExecuteCommand(ctx, fmt.Sprintf("stat -c '%%F:%%U:%%G:%%a' %s 2>/dev/null || echo 'notfound'", test.Path))
 	if err != nil {
 		result.Status = core.StatusError
 		result.Message = fmt.Sprintf("Error checking path %s: %v", test.Path, err)
@@ -35,7 +35,6 @@ func CheckFile(ctx context.Context, executor CommandExecutor, test core.FileTest
 		return result
 	}
 
-	// Parse stat output: type:owner:group:mode
 	parts := strings.Split(stdout, ":")
 	if len(parts) != 4 {
 		result.Status = core.StatusError
@@ -54,17 +53,14 @@ func CheckFile(ctx context.Context, executor CommandExecutor, test core.FileTest
 	result.Details["group"] = group
 	result.Details["mode"] = mode
 
-	// Check type
-	if test.Type != "" {
-		if !matchesFileType(fileType, test.Type) {
-			result.Status = core.StatusFail
-			result.Message = fmt.Sprintf("Path %s is a %s, expected %s", test.Path, fileType, test.Type)
-			result.Duration = time.Since(start)
-			return result
-		}
+	// Validation logic...
+	if test.Type != "" && !matchesFileType(fileType, test.Type) {
+		result.Status = core.StatusFail
+		result.Message = fmt.Sprintf("Path %s is a %s, expected %s", test.Path, fileType, test.Type)
+		result.Duration = time.Since(start)
+		return result
 	}
 
-	// Check owner
 	if test.Owner != "" && owner != test.Owner {
 		result.Status = core.StatusFail
 		result.Message = fmt.Sprintf("Path %s owner is %s, expected %s", test.Path, owner, test.Owner)
@@ -72,7 +68,6 @@ func CheckFile(ctx context.Context, executor CommandExecutor, test core.FileTest
 		return result
 	}
 
-	// Check group
 	if test.Group != "" && group != test.Group {
 		result.Status = core.StatusFail
 		result.Message = fmt.Sprintf("Path %s group is %s, expected %s", test.Path, group, test.Group)
@@ -80,7 +75,6 @@ func CheckFile(ctx context.Context, executor CommandExecutor, test core.FileTest
 		return result
 	}
 
-	// Check mode
 	if test.Mode != "" {
 		expectedMode := normalizeMode(test.Mode)
 		if mode != expectedMode {
@@ -96,7 +90,6 @@ func CheckFile(ctx context.Context, executor CommandExecutor, test core.FileTest
 	return result
 }
 
-// normalizeFileType converts stat output to simple type
 func normalizeFileType(statType string) string {
 	statType = strings.ToLower(statType)
 	if strings.Contains(statType, "directory") {
@@ -111,32 +104,12 @@ func normalizeFileType(statType string) string {
 	return statType
 }
 
-// matchesFileType checks if actual type matches expected type
 func matchesFileType(actual, expected string) bool {
-	actual = strings.ToLower(actual)
-	expected = strings.ToLower(expected)
-
-	if expected == "directory" && actual == "directory" {
-		return true
-	}
-	if expected == "file" && actual == "file" {
-		return true
-	}
-	if expected == "symlink" && actual == "symlink" {
-		return true
-	}
-	return actual == expected
+	return strings.ToLower(actual) == strings.ToLower(expected)
 }
 
-// normalizeMode ensures mode is in octal format without leading 0
 func normalizeMode(mode string) string {
-	// Remove any leading 0 or 0o prefix
 	mode = strings.TrimPrefix(mode, "0o")
 	mode = strings.TrimPrefix(mode, "0")
-
-	// Ensure it's 3 or 4 digits
-	if len(mode) == 3 || len(mode) == 4 {
-		return mode
-	}
 	return mode
 }

@@ -1,0 +1,78 @@
+name: macOS Local System Tests
+description: Example spec testing a macOS machine with all test types using the local provider
+
+config:
+  timeout: 60
+  fail_fast: false
+
+tests:
+  packages:
+    - name: Check git package
+      packages:
+        - git
+      state: present
+
+  files:
+    - name: Check /tmp directory
+      path: /tmp
+      type: directory
+
+  services:
+    - name: Check system service
+      service: com.apple.systemstats.daily
+      state: running
+
+  users:
+    - name: Check current user
+      user: neilfarmer
+
+  groups:
+    - name: Check staff group
+      groups:
+        - staff
+      state: present
+
+  file_content:
+    - name: Check localhost in /etc/hosts
+      path: /etc/hosts
+      contains:
+        - "localhost"
+
+  command_content:
+    - name: Check OS is Darwin
+      command: uname -s
+      contains:
+        - Darwin
+
+  docker:
+    - name: Check test container
+      container: test-container
+      state: running
+
+  filesystems:
+    - name: Check root filesystem
+      path: /
+      state: mounted
+
+  ping:
+    - name: Ping Google DNS
+      host: 8.8.8.8
+
+  dns:
+    - name: Resolve google.com
+      host: google.com
+
+  systeminfo:
+    - name: Check macOS system
+      os: darwin
+
+  http:
+    - name: Check example.com
+      url: http://example.com
+      status_code: 200
+
+  ports:
+    - name: Check SSH port
+      port: 22
+      protocol: tcp
+      state: listening
