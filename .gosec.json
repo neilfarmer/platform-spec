@@ -1,0 +1,6 @@
+{
+  "exclude-dirs": [],
+  "exclude-generated": true,
+  "severity": "medium",
+  "confidence": "medium"
+}
