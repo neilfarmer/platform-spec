@@ -1,0 +1,89 @@
+version: "1.0"
+
+metadata:
+  name: "Docker Container Test"
+  description: "Tests platform-spec running inside a Docker container using local provider"
+  tags: ["docker", "local", "test"]
+
+config:
+  fail_fast: false
+  timeout: 60
+
+tests:
+  packages:
+    - name: "curl is installed"
+      packages: [curl]
+      state: present
+
+    - name: "nginx is installed"
+      packages: [nginx]
+      state: present
+
+  files:
+    - name: "/opt/test directory exists"
+      path: /opt/test
+      type: directory
+      mode: "755"
+
+    - name: "/opt/test/testfile.txt exists"
+      path: /opt/test/testfile.txt
+      type: file
+      mode: "644"
+
+  file_content:
+    - name: "testfile.txt contains expected content"
+      path: /opt/test/testfile.txt
+      contains:
+        - "test content"
+
+  users:
+    - name: "testuser exists"
+      user: testuser
+      shell: /bin/bash
+      home: /home/testuser
+
+  groups:
+    - name: "root group exists"
+      groups: [root]
+      state: present
+
+  command_content:
+    - name: "echo command works"
+      command: echo "hello world"
+      contains:
+        - "hello world"
+
+    - name: "curl version check"
+      command: curl --version
+      contains:
+        - "curl"
+
+  http:
+    - name: "GitHub is reachable via HTTP"
+      url: https://github.com
+      status_code: 200
+
+    - name: "Google is reachable via HTTP"
+      url: https://www.google.com
+      status_code: 200
+
+  dns:
+    - name: "Google DNS resolves"
+      host: google.com
+
+    - name: "GitHub resolves"
+      host: github.com
+
+  systeminfo:
+    - name: "Ubuntu system"
+      os: ubuntu
+      os_version: "22.04"
+      arch: "x86_64"
+      version_match: prefix
+
+  ports:
+    - name: "SSH port 22 check"
+      port: 22
+      protocol: tcp
+      # Note: May not be listening in container, so checking closed
+      state: closed

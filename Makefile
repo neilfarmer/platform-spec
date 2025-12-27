@@ -1,4 +1,4 @@
-.PHONY: build clean test test-verbose install release-build deploy-kind-cluster destroy-kind-cluster
+.PHONY: build clean test test-verbose install release-build deploy-kind-cluster destroy-kind-cluster security-scan security-scan-vuln security-scan-static test-docker
 
 # Cluster name for kind
 KIND_CLUSTER_NAME ?= platform-spec-test
@@ -36,3 +36,33 @@ deploy-kind-cluster:
 destroy-kind-cluster:
 	@echo "Deleting kind cluster '$(KIND_CLUSTER_NAME)'..."
 	@kind delete cluster --name $(KIND_CLUSTER_NAME) || true
+
+# Docker integration test
+test-docker:
+	@echo "Building Linux binary for Docker..."
+	@GOOS=linux GOARCH=arm64 go build -o dist/platform-spec-linux ./cmd/platform-spec
+	@echo ""
+	@echo "Building Docker test image..."
+	@docker build -f integration/docker/Dockerfile.test -t platform-spec-test . --quiet
+	@echo ""
+	@echo "Running tests in Docker container..."
+	@docker run --rm platform-spec-test
+
+# Security scanning - Vulnerability check
+security-scan-vuln:
+	@echo "Installing govulncheck if needed..."
+	@which govulncheck > /dev/null 2>&1 || go install golang.org/x/vuln/cmd/govulncheck@latest
+	@echo ""
+	@echo "=== Running vulnerability scan (govulncheck) ==="
+	@PATH="$(HOME)/go/bin:$(PATH)" govulncheck -show verbose ./...
+
+# Security scanning - Static analysis
+security-scan-static:
+	@echo "Installing gosec if needed..."
+	@which gosec > /dev/null 2>&1 || go install github.com/securego/gosec/v2/cmd/gosec@latest
+	@echo ""
+	@echo "=== Running static security analysis (gosec) ==="
+	@PATH="$(HOME)/go/bin:$(PATH)" gosec -fmt=text ./...
+
+# Security scanning - Run both
+security-scan: security-scan-vuln security-scan-static

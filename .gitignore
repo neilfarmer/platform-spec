@@ -10,6 +10,7 @@
 
 # Test binary, built with `go test -c`
 *.test
+!integration/docker/Dockerfile.test
 
 # Code coverage profiles and other test artifacts
 *.out
@@ -40,6 +41,8 @@ bin/
 *.yml
 !examples/*.yaml
 !examples/*.yml
+!integration/**/*.yaml
+!integration/**/*.yml
 !.github/**/*.yaml
 !.github/**/*.yml
 !.goreleaser.yaml
