@@ -105,7 +105,13 @@ func executeFilesystemTest(ctx context.Context, provider core.Provider, test cor
 		stdout, _, _, err := provider.ExecuteCommand(ctx, fmt.Sprintf("df -BG --output=size %s | tail -1 | tr -d 'G '", test.Path))
 		if err == nil {
 			var actualSizeGB int
-			fmt.Sscanf(strings.TrimSpace(stdout), "%d", &actualSizeGB)
+			_, scanErr := fmt.Sscanf(strings.TrimSpace(stdout), "%d", &actualSizeGB)
+			if scanErr != nil {
+				result.Status = core.StatusError
+				result.Message = fmt.Sprintf("Error parsing filesystem size for %s: %v", test.Path, scanErr)
+				result.Duration = time.Since(start)
+				return result
+			}
 			if actualSizeGB < test.MinSizeGB {
 				result.Status = core.StatusFail
 				result.Message = fmt.Sprintf("Filesystem %s size is %dGB, minimum required is %dGB", test.Path, actualSizeGB, test.MinSizeGB)
@@ -118,7 +124,13 @@ func executeFilesystemTest(ctx context.Context, provider core.Provider, test cor
 	// Check maximum usage percentage
 	if test.MaxUsagePercent > 0 {
 		var actualUsagePercent int
-		fmt.Sscanf(usagePercent, "%d", &actualUsagePercent)
+		_, scanErr := fmt.Sscanf(usagePercent, "%d", &actualUsagePercent)
+		if scanErr != nil {
+			result.Status = core.StatusError
+			result.Message = fmt.Sprintf("Error parsing filesystem usage percent for %s: %v", test.Path, scanErr)
+			result.Duration = time.Since(start)
+			return result
+		}
 		if actualUsagePercent > test.MaxUsagePercent {
 			result.Status = core.StatusFail
 			result.Message = fmt.Sprintf("Filesystem %s usage is %d%%, maximum allowed is %d%%", test.Path, actualUsagePercent, test.MaxUsagePercent)

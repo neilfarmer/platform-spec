@@ -212,6 +212,35 @@ func TestExecutor_FilesystemTest(t *testing.T) {
 			wantStatus:   core.StatusError,
 			wantContains: "Unexpected findmnt output",
 		},
+		{
+			name: "invalid size format",
+			filesystemTest: core.FilesystemTest{
+				Name:      "Data volume",
+				Path:      "/data",
+				State:     "mounted",
+				MinSizeGB: 100,
+			},
+			setupMock: func(m *core.MockProvider) {
+				m.SetCommandResult("findmnt --noheadings --output TARGET,FSTYPE,OPTIONS,SIZE,USED,USE% --target /data 2>/dev/null", "/data           xfs    rw,noatime     500G  100G  20%", "", 0, nil)
+				m.SetCommandResult("df -BG --output=size /data | tail -1 | tr -d 'G '", "invalid", "", 0, nil)
+			},
+			wantStatus:   core.StatusError,
+			wantContains: "Error parsing filesystem size",
+		},
+		{
+			name: "invalid usage percent format",
+			filesystemTest: core.FilesystemTest{
+				Name:            "Data volume",
+				Path:            "/data",
+				State:           "mounted",
+				MaxUsagePercent: 80,
+			},
+			setupMock: func(m *core.MockProvider) {
+				m.SetCommandResult("findmnt --noheadings --output TARGET,FSTYPE,OPTIONS,SIZE,USED,USE% --target /data 2>/dev/null", "/data           xfs    rw,noatime     500G  100G  invalid%", "", 0, nil)
+			},
+			wantStatus:   core.StatusError,
+			wantContains: "Error parsing filesystem usage percent",
+		},
 	}
 
 	for _, tt := range tests {
