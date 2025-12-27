@@ -1,0 +1,39 @@
+# Test Dockerfile for platform-spec
+# Tests the local provider by installing and running platform-spec inside a container
+
+FROM ubuntu:22.04
+
+# Prevent interactive prompts
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install basic tools that will be tested
+RUN apt-get update && apt-get install -y \
+    curl \
+    ca-certificates \
+    nginx \
+    systemctl \
+    iputils-ping \
+    dnsutils \
+    net-tools \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create test directory structure
+RUN mkdir -p /opt/test && \
+    echo "test content" > /opt/test/testfile.txt && \
+    chmod 644 /opt/test/testfile.txt
+
+# Create test user
+RUN useradd -m -s /bin/bash testuser
+
+# Copy the binary (built locally for Linux)
+COPY dist/platform-spec-linux /usr/local/bin/platform-spec
+RUN chmod +x /usr/local/bin/platform-spec
+
+# Copy test spec
+COPY integration/docker/spec.yaml /test-spec.yaml
+
+# Verify installation
+RUN platform-spec version
+
+# Run tests using local provider
+CMD ["platform-spec", "test", "local", "/test-spec.yaml", "--verbose"]

@@ -43,7 +43,7 @@ test-docker:
 	@GOOS=linux GOARCH=arm64 go build -o dist/platform-spec-linux ./cmd/platform-spec
 	@echo ""
 	@echo "Building Docker test image..."
-	@docker build -f Dockerfile.test -t platform-spec-test . --quiet
+	@docker build -f integration/docker/Dockerfile.test -t platform-spec-test . --quiet
 	@echo ""
 	@echo "Running tests in Docker container..."
 	@docker run --rm platform-spec-test
