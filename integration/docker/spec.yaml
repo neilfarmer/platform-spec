@@ -58,12 +58,14 @@ tests:
       contains:
         - "curl"
 
-  ping:
-    - name: "Google DNS is reachable"
-      host: 8.8.8.8
+  http:
+    - name: "GitHub is reachable via HTTP"
+      url: https://github.com
+      status_code: 200
 
-    - name: "GitHub is reachable"
-      host: github.com
+    - name: "Google is reachable via HTTP"
+      url: https://www.google.com
+      status_code: 200
 
   dns:
     - name: "Google DNS resolves"

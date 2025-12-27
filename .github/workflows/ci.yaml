@@ -87,11 +87,30 @@ jobs:
         run: docker build -f integration/docker/Dockerfile.test -t platform-spec-test .
 
       - name: Run Docker integration tests
-        run: |
-          docker run --rm platform-spec-test | tee test-output.txt
-          if ! grep -q "Status: PASSED" test-output.txt; then
-            echo "❌ Docker integration tests failed"
-            cat test-output.txt
-            exit 1
-          fi
-          echo "✅ All Docker integration tests passed"
+        run: docker run --rm platform-spec-test
+
+  kubernetes-integration-test:
+    name: Kubernetes Integration Test
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: platform-spec-test
+          config: integration/kubernetes/kind-config.yaml
+          wait: 60s
+
+      - name: Build binary
+        run: go build -o dist/platform-spec ./cmd/platform-spec
+
+      - name: Run Kubernetes integration tests
+        run: ./dist/platform-spec test kubernetes examples/kubernetes-basic.yaml --verbose
