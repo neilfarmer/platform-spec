@@ -4,23 +4,50 @@ A pluggable infrastructure testing framework that validates system state across 
 
 ## Installation
 
-**macOS (ARM64)**
+**Quick Install (macOS & Linux)**
 
 ```bash
-curl -L https://github.com/neilfarmer/platform-spec/releases/download/v0.0.1/platform-spec_0.0.1_darwin_arm64.zip -o platform-spec.zip
+# Install to /usr/local/bin (default, may require sudo)
+curl -sSL https://raw.githubusercontent.com/neilfarmer/platform-spec/main/scripts/install.sh | bash
+
+# Install to custom directory (e.g., ~/.bin)
+curl -sSL https://raw.githubusercontent.com/neilfarmer/platform-spec/main/scripts/install.sh | bash -s -- --dir ~/.bin
+```
+
+The install script automatically detects your OS and architecture and downloads the latest release.
+
+**Note:** If installing to a custom directory, make sure it's in your `PATH`:
+```bash
+export PATH="$PATH:$HOME/.bin"  # Add to ~/.bashrc or ~/.zshrc
+```
+
+**Manual Installation**
+
+Download the appropriate binary for your platform from the [releases page](https://github.com/neilfarmer/platform-spec/releases/latest):
+
+<details>
+<summary>macOS (ARM64)</summary>
+
+```bash
+# Replace VERSION with the latest version (e.g., 0.3.1)
+VERSION=0.3.1
+curl -L https://github.com/neilfarmer/platform-spec/releases/download/v${VERSION}/platform-spec_${VERSION}_darwin_arm64.zip -o platform-spec.zip
 unzip platform-spec.zip
 sudo mv platform-spec /usr/local/bin/platform-spec
 rm platform-spec.zip
 ```
+</details>
 
-**Linux (AMD64)**
+<details>
+<summary>Linux (AMD64)</summary>
 
 ```bash
-curl -L https://github.com/neilfarmer/platform-spec/releases/download/v0.0.1/platform-spec_0.0.1_linux_amd64.tar.gz | tar xz
+# Replace VERSION with the latest version (e.g., 0.3.1)
+VERSION=0.3.1
+curl -L https://github.com/neilfarmer/platform-spec/releases/download/v${VERSION}/platform-spec_${VERSION}_linux_amd64.tar.gz | tar xz
 sudo mv platform-spec /usr/local/bin/platform-spec
 ```
-
-See [releases page](https://github.com/neilfarmer/platform-spec/releases) for other versions.
+</details>
 
 ## Quick Start
 
