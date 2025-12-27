@@ -1,47 +1,33 @@
-# SSH Provider
+# System Tests
 
-Test Linux systems via SSH connection.
+Test operating systems (local or remote) using system-level assertions.
 
-**Note:** The assertion types documented here (packages, files, services, etc.) work for both SSH and Local providers. This page covers SSH-specific connection details.
+**Note:** System tests work with any provider - Local (testing the current system), SSH (testing remote systems), or Kubernetes (testing via kubectl exec). This documentation covers all system-level test types.
 
-## Authentication
-
-The SSH provider supports:
-1. **SSH Key File** - Via `-i` flag
-2. **SSH Agent** - Via `SSH_AUTH_SOCK` environment variable (fallback)
+## Usage Examples
 
 ```bash
-# Using SSH agent
+# Test local system
+platform-spec test local spec.yaml
+
+# Test remote system via SSH
 platform-spec test ssh ubuntu@host spec.yaml
 
-# Using key file
-platform-spec test ssh -i ~/.ssh/prod.pem ubuntu@host spec.yaml
+# Test remote system with SSH key
+platform-spec test ssh -i ~/.ssh/key.pem ubuntu@host spec.yaml
+
+# Test Kubernetes pod (kubectl exec)
+platform-spec test kubernetes spec.yaml --context prod
 ```
 
-## Connection Options
+For SSH-specific authentication and connection options, see the [SSH Provider documentation](../providers/ssh.md).
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `-p, --port <int>` | SSH port | 22 |
-| `-t, --timeout <int>` | Connection timeout (seconds) | 30 |
+## Available Test Types
 
-## Target Format
-
-```
-[user@]hostname
-```
-
-**Examples:**
-- `ubuntu@192.168.1.100`
-- `root@web-server.example.com`
-- `web-server.example.com` (defaults to `root`)
-
-## Supported Assertions
-
-The SSH provider supports the following assertion types:
+System tests cover 14 different types of OS-level validations:
 
 ### Package Assertions
-Check if packages are installed or absent on the remote system.
+Check if packages are installed or absent on the system.
 
 [View Package Assertions →](assertions/packages.md)
 
@@ -112,19 +98,21 @@ Check that network ports/sockets are in the expected listening or closed state.
 
 ## Requirements
 
-The SSH user must have permissions to execute:
-- Package managers: `dpkg`, `rpm`, or `apk`
-- File commands: `stat`, `test`
-- Content search: `grep`
-- User/group commands: `id`, `getent`
-- Service commands: `systemctl`
-- Docker commands: `docker inspect` (if using Docker assertions)
-- Filesystem commands: `findmnt`, `df` (if using filesystem assertions)
-- Network commands: `ping` (if using ping assertions), `dig` or `getent` (if using DNS assertions)
-- System commands: `uname`, `hostname`, `cat` (if using systeminfo assertions)
-- HTTP commands: `curl` (if using HTTP assertions)
-- Socket commands: `ss` (if using port assertions)
-- Shell: `bash` or compatible
+The system under test must have the following commands available:
+- **Package managers**: `dpkg`, `rpm`, or `apk` (for package tests)
+- **File commands**: `stat`, `test` (for file tests)
+- **Content search**: `grep` (for file/command content tests)
+- **User/group commands**: `id`, `getent` (for user/group tests)
+- **Service commands**: `systemctl` (for service tests)
+- **Docker**: `docker inspect` (for Docker tests)
+- **Filesystem**: `findmnt`, `df` (for filesystem tests)
+- **Network**: `ping`, `dig` or `getent` (for ping/DNS tests)
+- **System info**: `uname`, `hostname`, `cat` (for systeminfo tests)
+- **HTTP**: `curl` (for HTTP tests)
+- **Sockets**: `ss` (for port tests)
+- **Shell**: `bash` or compatible
+
+**Note**: When using SSH provider, the SSH user must have permissions to execute these commands.
 
 ## Supported Distributions
 
@@ -178,6 +166,6 @@ tests:
 
 ## Limitations
 
-- No sudo support (commands run as connecting user)
-- Single host at a time (no parallel multi-host testing yet)
-- Read-only operations only (no state changes)
+- Read-only operations only (no state changes to the system)
+- No sudo support (commands run as the executing user)
+- Single system at a time (no parallel multi-system testing yet)

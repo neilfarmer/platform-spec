@@ -1,4 +1,4 @@
-package ssh
+package remote
 
 import (
 	"context"
@@ -12,13 +12,13 @@ import (
 	"golang.org/x/crypto/ssh/agent"
 )
 
-// Provider implements SSH-based testing
+// Provider implements remote system testing via SSH
 type Provider struct {
 	client *ssh.Client
 	config *Config
 }
 
-// Config holds SSH configuration
+// Config holds remote connection configuration
 type Config struct {
 	Host         string
 	Port         int
@@ -80,7 +80,7 @@ func (p *Provider) Connect(ctx context.Context) error {
 	sshConfig := &ssh.ClientConfig{
 		User:            p.config.User,
 		Auth:            authMethods,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // TODO: Add proper host key verification
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         p.config.Timeout,
 	}
 

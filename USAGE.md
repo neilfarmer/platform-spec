@@ -16,21 +16,51 @@ platform-spec test local spec.yaml
 
 Runs all tests against the local machine. Supports all 14 assertion types.
 
-**Available Assertions:** See [SSH Provider assertions](docs/ssh/README.md) - all work identically for local testing (14 assertion types).
+**Available Assertions:** See [System Test assertions](docs/system/README.md) - all work identically for local testing (14 assertion types).
 
-### SSH Provider
+### Remote Provider
 
-Test Linux systems via SSH connection.
+Test remote systems via SSH connection.
 
-**Full Documentation:** [docs/ssh/README.md](docs/ssh/README.md)
+**Full Documentation:** [docs/system/README.md](docs/system/README.md)
 
 **Quick Example:**
 
 ```bash
-platform-spec test ssh ubuntu@host spec.yaml
+platform-spec test remote ubuntu@host spec.yaml
 ```
 
-See [SSH Provider docs](docs/ssh/README.md) for authentication, connection options, and all available tests.
+**Authentication:**
+
+The remote provider supports two authentication methods:
+
+1. **SSH Key File** (recommended):
+   ```bash
+   platform-spec test remote ubuntu@host spec.yaml -i ~/.ssh/id_rsa
+   ```
+
+2. **SSH Agent**:
+   ```bash
+   # Ensure SSH agent is running with your key loaded
+   eval $(ssh-agent)
+   ssh-add ~/.ssh/id_rsa
+   platform-spec test remote ubuntu@host spec.yaml
+   ```
+
+**Connection Options:**
+
+```bash
+# Custom SSH port
+platform-spec test remote ubuntu@host spec.yaml -p 2222
+
+# Connection timeout
+platform-spec test remote ubuntu@host spec.yaml -t 60
+
+# Verbose output
+platform-spec test remote ubuntu@host spec.yaml --verbose
+```
+
+See [System Test docs](docs/system/README.md) for all available tests.
 
 ### AWS Provider
 
@@ -101,22 +131,22 @@ config:
 
 ### Assertion Types
 
-The following assertions work for both Local and SSH providers:
+The following assertions work for both Local and Remote providers:
 
-- [Package Assertions](docs/ssh/assertions/packages.md) - Check if packages are installed/absent
-- [File Assertions](docs/ssh/assertions/files.md) - Validate file/directory properties
-- [Service Assertions](docs/ssh/assertions/services.md) - Check service status and enabled state
-- [User Assertions](docs/ssh/assertions/users.md) - Validate user properties and group membership
-- [Group Assertions](docs/ssh/assertions/groups.md) - Check if groups exist or are absent
-- [File Content Assertions](docs/ssh/assertions/file_content.md) - Check file contents for strings or regex patterns
-- [Command Content Assertions](docs/ssh/assertions/command_content.md) - Execute commands and validate output or exit codes
-- [Docker Assertions](docs/ssh/assertions/docker.md) - Check Docker container status and properties
-- [Filesystem Assertions](docs/ssh/assertions/filesystems.md) - Check filesystem mount status, type, options, and disk usage
-- [Ping Assertions](docs/ssh/assertions/ping.md) - Check network reachability using ICMP ping
-- [DNS Assertions](docs/ssh/assertions/dns.md) - Check DNS resolution for hostnames
-- [System Info Assertions](docs/ssh/assertions/systeminfo.md) - Validate system properties (OS, architecture, kernel, hostname)
-- [HTTP Assertions](docs/ssh/assertions/http.md) - Test HTTP endpoints for availability, status codes, and response content
-- [Port Assertions](docs/ssh/assertions/ports.md) - Check that network ports are in the expected listening or closed state
+- [Package Assertions](docs/system/assertions/packages.md) - Check if packages are installed/absent
+- [File Assertions](docs/system/assertions/files.md) - Validate file/directory properties
+- [Service Assertions](docs/system/assertions/services.md) - Check service status and enabled state
+- [User Assertions](docs/system/assertions/users.md) - Validate user properties and group membership
+- [Group Assertions](docs/system/assertions/groups.md) - Check if groups exist or are absent
+- [File Content Assertions](docs/system/assertions/file_content.md) - Check file contents for strings or regex patterns
+- [Command Content Assertions](docs/system/assertions/command_content.md) - Execute commands and validate output or exit codes
+- [Docker Assertions](docs/system/assertions/docker.md) - Check Docker container status and properties
+- [Filesystem Assertions](docs/system/assertions/filesystems.md) - Check filesystem mount status, type, options, and disk usage
+- [Ping Assertions](docs/system/assertions/ping.md) - Check network reachability using ICMP ping
+- [DNS Assertions](docs/system/assertions/dns.md) - Check DNS resolution for hostnames
+- [System Info Assertions](docs/system/assertions/systeminfo.md) - Validate system properties (OS, architecture, kernel, hostname)
+- [HTTP Assertions](docs/system/assertions/http.md) - Test HTTP endpoints for availability, status codes, and response content
+- [Port Assertions](docs/system/assertions/ports.md) - Check that network ports are in the expected listening or closed state
 
 ## Output
 

@@ -1,4 +1,4 @@
-.PHONY: build clean test test-verbose install release-build deploy-kind-cluster destroy-kind-cluster security-scan security-scan-vuln security-scan-static test-docker
+.PHONY: build clean test install release-build deploy-kind-cluster destroy-kind-cluster security-scan security-scan-vuln security-scan-static test-docker
 
 # Cluster name for kind
 KIND_CLUSTER_NAME ?= platform-spec-test
@@ -14,9 +14,25 @@ release-build:
 
 clean:
 	rm -rf dist/
+	rm -f coverage.out coverage-filtered.out
 
 test:
-	go test -v -count=1 ./...
+	@echo "Running tests with coverage..."
+	@go test -v -count=1 -coverprofile=coverage.out -covermode=count ./...
+	@echo ""
+	@echo "Calculating coverage (excluding cmd/)..."
+	@grep -v "cmd/platform-spec" coverage.out > coverage-filtered.out
+	@COVERAGE=$$(go tool cover -func=coverage-filtered.out | grep total: | awk '{print $$3}' | sed 's/%//'); \
+	echo "Current coverage: $${COVERAGE}%"; \
+	echo "Required coverage: 80%"; \
+	if [ $$(echo "$${COVERAGE} < 80" | bc) -eq 1 ]; then \
+		echo "❌ FAIL: Coverage $${COVERAGE}% is below minimum 80%"; \
+		rm -f coverage.out coverage-filtered.out; \
+		exit 1; \
+	else \
+		echo "✅ PASS: Coverage $${COVERAGE}% meets minimum 80%"; \
+	fi
+	@rm -f coverage.out coverage-filtered.out
 
 install: build
 	cp dist/platform-spec $(GOPATH)/bin/platform-spec

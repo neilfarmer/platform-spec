@@ -2,6 +2,16 @@
 
 A pluggable infrastructure testing framework that validates system state across multiple platforms using declarative YAML specifications.
 
+## Architecture
+
+platform-spec uses a **plugin-based architecture** that separates test execution from command delivery:
+
+- **Plugins** define WHAT to test (System tests, Kubernetes tests)
+- **Providers** define HOW to execute commands (Remote, Local, Kubernetes)
+- **Executor** coordinates plugins and providers
+
+This design allows system-level tests (files, packages, services, etc.) to work seamlessly on both local and remote systems, while specialized plugins handle platform-specific resources like Kubernetes.
+
 ## Installation
 
 **Quick Install (macOS & Linux)**
@@ -73,7 +83,7 @@ Run the tests:
 platform-spec test local mytest.yaml
 
 # Test remote system via SSH
-platform-spec test ssh ubuntu@myhost mytest.yaml
+platform-spec test remote ubuntu@myhost mytest.yaml
 ```
 
 See [USAGE.md](USAGE.md) for complete documentation.
@@ -82,17 +92,21 @@ See [USAGE.md](USAGE.md) for complete documentation.
 
 ### Phase 1: Core Framework ✅
 
-- SSH provider with agent support
-- Package assertions (dpkg, rpm, apk)
-- File/directory assertions
+- Remote and Local providers
+- Package and file assertions
 - Human-readable output
 
-### Phase 2: Enhanced Assertions (In Progress)
+### Phase 2: Plugin Architecture ✅
 
-- Service status testing
-- User/group testing
-- Custom command assertions
-- File content matching
+- **System Plugin**: 14 test types for OS-level validation
+  - Packages, files, services, users, groups
+  - Docker containers, filesystems
+  - Network (ping, DNS, HTTP, ports)
+  - System information
+  - File and command content matching
+- **Kubernetes Plugin**: 5 test types for K8s resources
+  - Namespaces, pods, deployments, services, configmaps
+- **Kubernetes Provider**: kubectl-based command execution
 
 ### Phase 3: Advanced Features
 
@@ -104,4 +118,3 @@ See [USAGE.md](USAGE.md) for complete documentation.
 
 - AWS provider (EC2, S3, IAM, RDS)
 - OpenStack provider
-- Kubernetes provider

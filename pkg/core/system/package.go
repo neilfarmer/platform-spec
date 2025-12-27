@@ -1,4 +1,4 @@
-package assertions
+package system
 
 import (
 	"context"
@@ -9,13 +9,8 @@ import (
 	"github.com/neilfarmer/platform-spec/pkg/core"
 )
 
-// CommandExecutor defines the interface for executing commands
-type CommandExecutor interface {
-	ExecuteCommand(ctx context.Context, command string) (stdout, stderr string, exitCode int, err error)
-}
-
-// CheckPackages checks if packages are installed/absent
-func CheckPackages(ctx context.Context, executor CommandExecutor, test core.PackageTest) core.Result {
+// executePackageTest executes a package test
+func executePackageTest(ctx context.Context, provider core.Provider, test core.PackageTest) core.Result {
 	start := time.Now()
 	result := core.Result{
 		Name:    test.Name,
@@ -24,8 +19,7 @@ func CheckPackages(ctx context.Context, executor CommandExecutor, test core.Pack
 	}
 
 	for _, pkg := range test.Packages {
-		// Detect package manager and check package
-		installed, version, err := isPackageInstalled(ctx, executor, pkg)
+		installed, version, err := isPackageInstalled(ctx, provider, pkg)
 		if err != nil {
 			result.Status = core.StatusError
 			result.Message = fmt.Sprintf("Error checking package %s: %v", pkg, err)
@@ -45,7 +39,6 @@ func CheckPackages(ctx context.Context, executor CommandExecutor, test core.Pack
 			result.Details[pkg] = version
 		}
 
-		// If any package fails and we haven't failed yet, update message
 		if result.Status == core.StatusFail {
 			break
 		}
@@ -63,10 +56,10 @@ func CheckPackages(ctx context.Context, executor CommandExecutor, test core.Pack
 	return result
 }
 
-// isPackageInstalled checks if a package is installed and returns its version
-func isPackageInstalled(ctx context.Context, executor CommandExecutor, pkg string) (bool, string, error) {
-	// Try dpkg (Debian/Ubuntu)
-	stdout, _, exitCode, err := executor.ExecuteCommand(ctx, fmt.Sprintf("dpkg -l %s 2>/dev/null | grep '^ii'", pkg))
+// isPackageInstalled checks if a package is installed
+func isPackageInstalled(ctx context.Context, provider core.Provider, pkg string) (bool, string, error) {
+	// Try dpkg
+	stdout, _, exitCode, err := provider.ExecuteCommand(ctx, fmt.Sprintf("dpkg -l %s 2>/dev/null | grep '^ii'", pkg))
 	if err != nil {
 		return false, "", err
 	}
@@ -75,8 +68,8 @@ func isPackageInstalled(ctx context.Context, executor CommandExecutor, pkg strin
 		return true, version, nil
 	}
 
-	// Try rpm (RHEL/CentOS/Fedora)
-	stdout, _, exitCode, err = executor.ExecuteCommand(ctx, fmt.Sprintf("rpm -q %s 2>/dev/null", pkg))
+	// Try rpm
+	stdout, _, exitCode, err = provider.ExecuteCommand(ctx, fmt.Sprintf("rpm -q %s 2>/dev/null", pkg))
 	if err != nil {
 		return false, "", err
 	}
@@ -84,8 +77,8 @@ func isPackageInstalled(ctx context.Context, executor CommandExecutor, pkg strin
 		return true, strings.TrimSpace(stdout), nil
 	}
 
-	// Try apk (Alpine)
-	stdout, _, exitCode, err = executor.ExecuteCommand(ctx, fmt.Sprintf("apk info -e %s 2>/dev/null", pkg))
+	// Try apk
+	stdout, _, exitCode, err = provider.ExecuteCommand(ctx, fmt.Sprintf("apk info -e %s 2>/dev/null", pkg))
 	if err != nil {
 		return false, "", err
 	}
@@ -96,7 +89,6 @@ func isPackageInstalled(ctx context.Context, executor CommandExecutor, pkg strin
 	return false, "", nil
 }
 
-// extractDpkgVersion extracts version from dpkg output
 func extractDpkgVersion(output string) string {
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 	if len(lines) == 0 {
