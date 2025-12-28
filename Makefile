@@ -1,7 +1,14 @@
-.PHONY: build clean test install release-build deploy-kind-cluster destroy-kind-cluster security-scan security-scan-vuln security-scan-static test-docker
+.PHONY: build clean test install release-build deploy-kind-cluster destroy-kind-cluster security-scan security-scan-vuln security-scan-static test-docker test-docker-local test-kubernetes test-integration
 
 # Cluster name for kind
 KIND_CLUSTER_NAME ?= platform-spec-test
+
+# Verbose mode for tests (set VERBOSE=true to enable)
+VERBOSE ?= false
+VERBOSE_FLAG :=
+ifeq ($(VERBOSE),true)
+	VERBOSE_FLAG := --verbose
+endif
 
 build:
 	mkdir -p dist
@@ -53,16 +60,38 @@ destroy-kind-cluster:
 	@echo "Deleting kind cluster '$(KIND_CLUSTER_NAME)'..."
 	@kind delete cluster --name $(KIND_CLUSTER_NAME) || true
 
-# Docker integration test
+# Docker integration test (auto-detects architecture)
 test-docker:
 	@echo "Building Linux binary for Docker..."
-	@GOOS=linux GOARCH=arm64 go build -o dist/platform-spec-linux ./cmd/platform-spec
+	@GOOS=linux GOARCH=$$(go env GOARCH) go build -o dist/platform-spec-linux ./cmd/platform-spec
 	@echo ""
 	@echo "Building Docker test image..."
-	@docker build -f integration/docker/Dockerfile.test -t platform-spec-test . --quiet
+	@docker build -f integration/docker/Dockerfile.test -t platform-spec-test .
 	@echo ""
 	@echo "Running tests in Docker container..."
-	@docker run --rm platform-spec-test
+	@docker run --rm platform-spec-test platform-spec test local /test-spec.yaml $(VERBOSE_FLAG)
+
+# Docker integration test for local ARM64 development
+test-docker-local:
+	@echo "Building Linux ARM64 binary for Docker..."
+	@GOOS=linux GOARCH=arm64 go build -o dist/platform-spec-linux ./cmd/platform-spec
+	@echo ""
+	@echo "Building Docker test image (ARM64)..."
+	@docker build -f integration/docker/Dockerfile.test.local -t platform-spec-test-local .
+	@echo ""
+	@echo "Running tests in Docker container (ARM64)..."
+	@docker run --rm platform-spec-test-local platform-spec test local /test-spec.yaml $(VERBOSE_FLAG)
+
+# Kubernetes integration test (matches CI pipeline)
+test-kubernetes: deploy-kind-cluster build
+	@echo ""
+	@echo "Running Kubernetes integration tests..."
+	@./dist/platform-spec test kubernetes examples/kubernetes-basic.yaml $(VERBOSE_FLAG)
+
+# Run all integration tests (local)
+test-integration: test-docker-local test-kubernetes
+	@echo ""
+	@echo "✅ All integration tests completed successfully!"
 
 # Security scanning - Vulnerability check
 security-scan-vuln:

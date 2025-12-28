@@ -30,8 +30,9 @@ func executeKubernetesPodTest(ctx context.Context, provider core.Provider, test 
 		return result
 	}
 
-	// Handle not found
-	if exitCode == 1 && strings.Contains(stderr, "not found") {
+	// Handle not found (check both stdout and stderr since we use 2>&1)
+	combinedOutput := stdout + stderr
+	if exitCode == 1 && (strings.Contains(combinedOutput, "not found") || strings.Contains(combinedOutput, "NotFound")) {
 		result.Status = core.StatusFail
 		result.Message = fmt.Sprintf("Pod %s not found in namespace %s", test.Pod, test.Namespace)
 		result.Duration = time.Since(start)
@@ -40,7 +41,12 @@ func executeKubernetesPodTest(ctx context.Context, provider core.Provider, test 
 
 	if exitCode != 0 {
 		result.Status = core.StatusError
-		result.Message = fmt.Sprintf("kubectl error: %s", strings.TrimSpace(stderr))
+		errorMsg := strings.TrimSpace(combinedOutput)
+		if errorMsg == "" {
+			errorMsg = "unknown error"
+		}
+		result.Message = fmt.Sprintf("kubectl error: %s", errorMsg)
+		result.Details["command"] = cmd
 		result.Duration = time.Since(start)
 		return result
 	}
@@ -58,6 +64,7 @@ func executeKubernetesPodTest(ctx context.Context, provider core.Provider, test 
 	phase, _ := getNestedString(pod, "status", "phase")
 	result.Details["phase"] = phase
 	result.Details["namespace"] = test.Namespace
+	result.Details["command"] = cmd
 
 	// Check state
 	if test.State != "exists" {

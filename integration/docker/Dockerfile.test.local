@@ -1,7 +1,7 @@
-# Test Dockerfile for platform-spec
+# Test Dockerfile for platform-spec (ARM64/Local)
 # Tests the local provider by installing and running platform-spec inside a container
 
-FROM ubuntu:22.04
+FROM --platform=linux/arm64 ubuntu:22.04
 
 # Prevent interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
@@ -25,12 +25,12 @@ RUN mkdir -p /opt/test && \
 # Create test user
 RUN useradd -m -s /bin/bash testuser
 
-# Copy the binary (built locally for Linux)
+# Copy the binary (built locally for Linux ARM64)
 COPY dist/platform-spec-linux /usr/local/bin/platform-spec
 RUN chmod +x /usr/local/bin/platform-spec
 
 # Copy test spec
-COPY integration/docker/spec.yaml /test-spec.yaml
+COPY integration/docker/spec-local.yaml /test-spec.yaml
 
 # Verify installation
 RUN platform-spec version

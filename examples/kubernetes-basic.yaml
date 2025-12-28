@@ -1,9 +1,9 @@
 version: "1.0"
 
 metadata:
-  name: "Basic Kubernetes Test"
-  description: "Tests default Kubernetes resources - no deployment needed"
-  tags: ["kubernetes", "example"]
+  name: "Kubernetes Integration Test"
+  description: "Comprehensive tests for default Kubernetes resources on Kind cluster"
+  tags: ["kubernetes", "integration", "kind"]
 
 config:
   fail_fast: false
@@ -13,15 +13,40 @@ config:
 
 tests:
   kubernetes:
+    # Namespace tests
     namespaces:
       - name: "Default namespace exists"
         namespace: default
         state: present
 
-      - name: "Kube-system namespace exists"
+      - name: "Kube-system namespace exists with labels"
         namespace: kube-system
         state: present
+        labels:
+          kubernetes.io/metadata.name: kube-system
 
+      - name: "Kube-public namespace exists"
+        namespace: kube-public
+        state: present
+
+      - name: "Kube-node-lease namespace exists"
+        namespace: kube-node-lease
+        state: present
+
+    # Node tests
+    nodes:
+      - name: "At least one node exists"
+        min_count: 1
+
+      - name: "All nodes are ready"
+        min_ready: 1
+
+      - name: "Cluster has exactly one control plane node"
+        count: 1
+        labels:
+          node-role.kubernetes.io/control-plane: ""
+
+    # Service tests
     services:
       - name: "Kubernetes API service exists"
         service: kubernetes
@@ -40,3 +65,61 @@ tests:
             protocol: UDP
           - port: 53
             protocol: TCP
+
+    # Deployment tests
+    deployments:
+      - name: "CoreDNS deployment is available"
+        deployment: coredns
+        namespace: kube-system
+        state: available
+        min_replicas: 1
+
+      - name: "CoreDNS has correct ready replicas"
+        deployment: coredns
+        namespace: kube-system
+        state: available
+        min_ready_replicas: 1
+
+    # Pod tests - Control plane pods (have static names in Kind)
+    pods:
+      - name: "Etcd pod is running"
+        pod: etcd-platform-spec-test-control-plane
+        namespace: kube-system
+        state: running
+        ready: true
+
+      - name: "API server pod is running"
+        pod: kube-apiserver-platform-spec-test-control-plane
+        namespace: kube-system
+        state: running
+        ready: true
+
+      - name: "Controller manager pod is running"
+        pod: kube-controller-manager-platform-spec-test-control-plane
+        namespace: kube-system
+        state: running
+        ready: true
+
+      - name: "Scheduler pod is running"
+        pod: kube-scheduler-platform-spec-test-control-plane
+        namespace: kube-system
+        state: running
+        ready: true
+
+    # Note: CoreDNS and kube-proxy pod tests removed because they have
+    # generated names (e.g., coredns-xxxxxxxxx-xxxxx). Instead, we verify
+    # CoreDNS via deployment tests which confirm pods are running.
+
+    # ConfigMap tests
+    configmaps:
+      - name: "CoreDNS ConfigMap exists"
+        configmap: coredns
+        namespace: kube-system
+        state: present
+        keys:
+          - Corefile
+
+      - name: "Kube-proxy ConfigMap exists"
+        configmap: kube-proxy
+        namespace: kube-system
+        state: present
