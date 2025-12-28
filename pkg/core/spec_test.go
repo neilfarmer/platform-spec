@@ -8,9 +8,10 @@ import (
 
 func TestParseSpec(t *testing.T) {
 	tests := []struct {
-		name    string
-		yaml    string
-		wantErr bool
+		name     string
+		yaml     string
+		wantErr  bool
+		filename string // Optional: custom filename (default: spec.yaml)
 	}{
 		{
 			name: "valid minimal spec",
@@ -40,6 +41,17 @@ tests:
 			name: "invalid yaml",
 			yaml: `this is not valid yaml: [[[`,
 			wantErr: true,
+		},
+		{
+			name: "invalid file extension",
+			yaml: `version: "1.0"
+tests:
+  packages:
+    - name: "test"
+      packages: [bash]
+      state: present`,
+			wantErr: true,
+			filename: "spec.txt", // Will be used to test non-YAML extension
 		},
 		{
 			name: "missing package name",
@@ -339,7 +351,11 @@ tests:
 		t.Run(tt.name, func(t *testing.T) {
 			// Create temporary file with YAML content
 			tmpDir := t.TempDir()
-			tmpFile := filepath.Join(tmpDir, "spec.yaml")
+			filename := tt.filename
+			if filename == "" {
+				filename = "spec.yaml"
+			}
+			tmpFile := filepath.Join(tmpDir, filename)
 			if err := os.WriteFile(tmpFile, []byte(tt.yaml), 0644); err != nil {
 				t.Fatalf("Failed to create temp file: %v", err)
 			}

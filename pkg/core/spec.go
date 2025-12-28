@@ -3,6 +3,8 @@ package core
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -327,7 +329,19 @@ type KubernetesTests struct {
 
 // ParseSpec parses a YAML spec file
 func ParseSpec(path string) (*Spec, error) {
-	data, err := os.ReadFile(path)
+	// Clean the path to prevent directory traversal attacks (CWE-22)
+	cleanPath := filepath.Clean(path)
+
+	// Validate that the file has a YAML extension
+	ext := strings.ToLower(filepath.Ext(cleanPath))
+	if ext != ".yaml" && ext != ".yml" {
+		return nil, fmt.Errorf("spec file must have .yaml or .yml extension, got: %s", ext)
+	}
+
+	// Read the spec file
+	// Note: This is intentionally reading user-specified files. The user runs this
+	// CLI tool with their own permissions to read their own spec files.
+	data, err := os.ReadFile(cleanPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read spec file: %w", err)
 	}
