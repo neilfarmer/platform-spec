@@ -19,9 +19,12 @@ import (
 
 var (
 	// Remote connection flags
-	identityFile string
-	remotePort   int
-	timeout      int
+	identityFile          string
+	remotePort            int
+	timeout               int
+	strictHostKeyChecking bool
+	knownHostsFile        string
+	insecureIgnoreHostKey bool
 
 	// Kubernetes flags
 	kubeconfig    string
@@ -87,6 +90,9 @@ func init() {
 	remoteCmd.Flags().StringVarP(&identityFile, "identity", "i", "", "Path to SSH private key")
 	remoteCmd.Flags().IntVarP(&remotePort, "port", "p", 22, "SSH port")
 	remoteCmd.Flags().IntVarP(&timeout, "timeout", "t", 30, "Connection timeout in seconds")
+	remoteCmd.Flags().BoolVar(&strictHostKeyChecking, "strict-host-key-checking", true, "Enable strict host key checking (default: true)")
+	remoteCmd.Flags().StringVar(&knownHostsFile, "known-hosts-file", "", "Path to known_hosts file (default: ~/.ssh/known_hosts)")
+	remoteCmd.Flags().BoolVar(&insecureIgnoreHostKey, "insecure-ignore-host-key", false, "Disable host key verification (INSECURE, not recommended)")
 
 	// Output flags (shared across all test commands)
 	remoteCmd.Flags().StringVarP(&outputFormat, "output", "o", "human", "Output format (human, json, junit)")
@@ -134,11 +140,14 @@ func runRemoteTest(cmd *cobra.Command, args []string) {
 
 	// Create remote provider
 	remoteProvider := remote.NewProvider(&remote.Config{
-		Host:         host,
-		Port:         remotePort,
-		User:         user,
-		IdentityFile: identityFile,
-		Timeout:      time.Duration(timeout) * time.Second,
+		Host:                  host,
+		Port:                  remotePort,
+		User:                  user,
+		IdentityFile:          identityFile,
+		Timeout:               time.Duration(timeout) * time.Second,
+		StrictHostKeyChecking: strictHostKeyChecking,
+		KnownHostsFile:        knownHostsFile,
+		InsecureIgnoreHostKey: insecureIgnoreHostKey,
 	})
 
 	// Connect to target

@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
+	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 // Provider implements remote system testing via SSH
@@ -20,11 +22,14 @@ type Provider struct {
 
 // Config holds remote connection configuration
 type Config struct {
-	Host         string
-	Port         int
-	User         string
-	IdentityFile string
-	Timeout      time.Duration
+	Host                   string
+	Port                   int
+	User                   string
+	IdentityFile           string
+	Timeout                time.Duration
+	StrictHostKeyChecking  bool   // Enable strict host key checking (default: true)
+	KnownHostsFile         string // Path to known_hosts file (default: ~/.ssh/known_hosts)
+	InsecureIgnoreHostKey  bool   // Disable host key verification (INSECURE, not recommended)
 }
 
 // ParseTarget parses a target string like "user@host" or "host"
@@ -77,10 +82,16 @@ func (p *Provider) Connect(ctx context.Context) error {
 		return fmt.Errorf("no authentication method available (no key file provided and no SSH agent found)")
 	}
 
+	// Configure host key verification
+	hostKeyCallback, err := p.getHostKeyCallback()
+	if err != nil {
+		return fmt.Errorf("failed to configure host key verification: %w", err)
+	}
+
 	sshConfig := &ssh.ClientConfig{
 		User:            p.config.User,
 		Auth:            authMethods,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		HostKeyCallback: hostKeyCallback,
 		Timeout:         p.config.Timeout,
 	}
 
@@ -130,6 +141,50 @@ func (p *Provider) ExecuteCommand(ctx context.Context, command string) (stdout, 
 	}
 
 	return stdout, stderr, exitCode, nil
+}
+
+// getHostKeyCallback returns the appropriate host key callback based on configuration
+func (p *Provider) getHostKeyCallback() (ssh.HostKeyCallback, error) {
+	// If explicitly set to insecure mode, use InsecureIgnoreHostKey
+	// This is NOT recommended and should only be used in controlled environments
+	if p.config.InsecureIgnoreHostKey {
+		fmt.Fprintf(os.Stderr, "WARNING: SSH host key verification is disabled (insecure mode)\n")
+		// #nosec G106 -- Insecure mode is explicitly opt-in via CLI flag with warning
+		return ssh.InsecureIgnoreHostKey(), nil
+	}
+
+	// Determine known_hosts file path
+	knownHostsPath := p.config.KnownHostsFile
+	if knownHostsPath == "" {
+		// Default to ~/.ssh/known_hosts
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get user home directory: %w", err)
+		}
+		knownHostsPath = filepath.Join(home, ".ssh", "known_hosts")
+	}
+
+	// Check if known_hosts file exists
+	if _, err := os.Stat(knownHostsPath); os.IsNotExist(err) {
+		// If StrictHostKeyChecking is enabled (default), return error
+		// This matches OpenSSH behavior
+		if p.config.StrictHostKeyChecking {
+			return nil, fmt.Errorf("known_hosts file not found at %s (strict host key checking enabled). "+
+				"Either create the file, disable strict checking, or use insecure mode (not recommended)", knownHostsPath)
+		}
+		// If not strict, warn and use insecure mode
+		fmt.Fprintf(os.Stderr, "WARNING: known_hosts file not found at %s, disabling host key verification\n", knownHostsPath)
+		// #nosec G106 -- Fallback when known_hosts missing and strict checking disabled
+		return ssh.InsecureIgnoreHostKey(), nil
+	}
+
+	// Use known_hosts for host key verification
+	hostKeyCallback, err := knownhosts.New(knownHostsPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create host key callback from %s: %w", knownHostsPath, err)
+	}
+
+	return hostKeyCallback, nil
 }
 
 // getSSHAgent connects to the SSH agent
