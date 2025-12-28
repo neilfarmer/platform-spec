@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.0](https://github.com/neilfarmer/platform-spec/compare/v0.4.0...v0.5.0) (2025-12-28)
+
+
+### Features
+
+* Update go version ([acc0315](https://github.com/neilfarmer/platform-spec/commit/acc0315a1e0685d2650c6eb44cc9e8fbcd88f673))
+
+
+### Bug Fixes
+
+* Handle errors from fmt.Sscanf in filesystem tests ([94cfcc6](https://github.com/neilfarmer/platform-spec/commit/94cfcc64dd8c20e434b8950509277635c4443c89))
+* Implement secure SSH host key verification (CWE-322) ([fc387ab](https://github.com/neilfarmer/platform-spec/commit/fc387abfa5872b41388e579dbd68173b85933d71))
+* Prevent directory traversal in spec file parsing (CWE-22) ([4796b3a](https://github.com/neilfarmer/platform-spec/commit/4796b3a37eeb6d048cdcf8808f435ceb34cf9498))
+
 ## [0.4.0](https://github.com/neilfarmer/platform-spec/compare/v0.3.1...v0.4.0) (2025-12-25)
 
 
