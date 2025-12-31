@@ -1,4 +1,10 @@
-.PHONY: build clean test install release-build deploy-kind-cluster destroy-kind-cluster security-scan security-scan-vuln security-scan-static test-docker test-docker-local test-kubernetes test-integration test-inventory test-bad-inventory test-jump destroy-test-jump
+.DEFAULT_GOAL := _setup
+
+
+.PHONY: _setup
+_setup:
+	@node .github/setup.js
+.PHONY: build clean test install release-build deploy-kind-cluster destroy-kind-cluster security-scan security-scan-vuln security-scan-static test-docker test-docker-local test-kubernetes test-integration test-inventory test-integration-imports test-bad-inventory test-jump destroy-test-jump test-parallel-performance custom-test
 
 # Cluster name for kind
 KIND_CLUSTER_NAME ?= platform-spec-test
@@ -85,6 +91,9 @@ test-docker-local:
 # Kubernetes integration test (matches CI pipeline)
 test-kubernetes: deploy-kind-cluster build
 	@echo ""
+	@echo "Waiting for CoreDNS to be ready..."
+	@kubectl wait --for=condition=available --timeout=120s deployment/coredns -n kube-system || true
+	@sleep 5
 	@echo "Running Kubernetes integration tests..."
 	@./dist/platform-spec test kubernetes examples/kubernetes-basic.yaml $(VERBOSE_FLAG)
 
@@ -93,6 +102,12 @@ test-inventory: build
 	@echo "=== Running Inventory Integration Test ==="
 	@echo ""
 	@cd integration && ./test-inventory-realistic.sh
+
+# Import integration test
+test-integration-imports: build
+	@echo "=== Running Import Integration Test ==="
+	@echo ""
+	@cd integration && ./test-imports.sh
 
 # Bad inventory test - demonstrates multi-host table with mixed results
 test-bad-inventory: build
@@ -111,7 +126,14 @@ test-bad-inventory: build
 	@cd integration && ./test-bad-inventory.sh
 
 # Run all integration tests (local)
-test-integration: test-docker-local test-kubernetes test-inventory
+test-integration: test-docker-local test-inventory test-integration-imports
+	@echo ""
+	@echo "Running Kubernetes integration tests (with cluster deploy/destroy)..."
+	@$(MAKE) test-kubernetes || ($(MAKE) destroy-kind-cluster && exit 1)
+	@$(MAKE) destroy-kind-cluster
+	@echo ""
+	@echo "Running parallel execution performance tests..."
+	@$(MAKE) test-parallel-performance
 	@echo ""
 	@echo "✅ All integration tests completed successfully!"
 
@@ -199,3 +221,32 @@ destroy-test-jump:
 	@ssh-keygen -R "[localhost]:2222" 2>/dev/null || true
 	@echo ""
 	@echo "✅ Jump host test environment destroyed"
+
+# Parallel execution performance test
+test-parallel-performance: build
+	@echo "=== Running Parallel Execution Performance Tests ==="
+	@echo ""
+	@echo "This will:"
+	@echo "  - Spin up 30 SSH test containers"
+	@echo "  - Test sequential vs parallel execution"
+	@echo "  - Measure performance with 10, 15, and 30 workers"
+	@echo "  - Show speedup improvements"
+	@echo ""
+	@echo "Note: First run will download Docker images (~3 minutes)"
+	@echo ""
+	@cd integration && ./test-parallel.sh
+
+# Custom integration test - 50 containers via jump host with 30 tests each
+custom-test: build
+	@echo "=== Running Custom Integration Test ==="
+	@echo ""
+	@echo "This will:"
+	@echo "  - Spin up 1 jump host + 50 SSH target containers"
+	@echo "  - Route all connections: localhost --> jump --> targets"
+	@echo "  - Run 30 comprehensive tests on each container (1500 total)"
+	@echo "  - Test sequential and parallel execution (10, 25, 50 workers)"
+	@echo "  - Show performance speedup comparisons"
+	@echo ""
+	@echo "Note: First run will download Docker images (~3 minutes)"
+	@echo ""
+	@cd integration && ./test-custom.sh
