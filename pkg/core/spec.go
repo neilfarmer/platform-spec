@@ -353,7 +353,8 @@ func ParseSpec(path string) (*Spec, error) {
 		if strings.Contains(errMsg, "cannot unmarshal !!seq into core.Tests") {
 			return nil, fmt.Errorf("invalid spec format: 'tests' should contain test types (packages, files, services, etc.), not a list.\n\nExample correct format:\ntests:\n  packages:\n    - name: \"test name\"\n      packages:\n        - package-name\n\nSee examples/ directory for reference")
 		}
-		return nil, fmt.Errorf("failed to parse YAML: %w", err)
+		// Enhance other YAML errors with helpful context
+		return nil, enhanceYAMLError(err, cleanPath)
 	}
 
 	if err := spec.Validate(); err != nil {

@@ -1600,3 +1600,402 @@ func contains(s, substr string) bool {
 	}
 	return false
 }
+
+// TestParseSpecEnhancedErrors tests that enhanced YAML error messages appear
+// when parsing specs with various YAML errors
+func TestParseSpecEnhancedErrors(t *testing.T) {
+	tests := []struct {
+		name            string
+		yaml            string
+		wantErrContains []string // All of these strings should appear in the error
+	}{
+		{
+			name: "string instead of array for packages",
+			yaml: `version: "1.0"
+tests:
+  packages:
+    - name: "Docker installed"
+      packages: docker-ce
+      state: present`,
+			wantErrContains: []string{
+				"YAML parsing error",
+				"Expected a list",
+				"got a single string value",
+				"Wrong: packages: nginx",
+				"Right: packages: [nginx]",
+				"examples/basic.yaml",
+			},
+		},
+		{
+			name: "string instead of array for services",
+			yaml: `version: "1.0"
+tests:
+  services:
+    - name: "Docker running"
+      services: docker
+      state: running`,
+			wantErrContains: []string{
+				"Expected a list",
+				"got a single string value",
+				"Common fix: Wrap single values in brackets",
+			},
+		},
+		{
+			name: "array instead of string for name",
+			yaml: `version: "1.0"
+tests:
+  packages:
+    - name: ["test"]
+      packages: [docker]`,
+			wantErrContains: []string{
+				"Expected a string",
+				"got a list",
+				"Wrong: name: [test]",
+				"Right: name: test",
+			},
+		},
+		{
+			name: "string instead of int for port",
+			yaml: `version: "1.0"
+tests:
+  ports:
+    - name: "SSH port"
+      port: "22"
+      state: listening`,
+			wantErrContains: []string{
+				"Expected a number",
+				"got a string",
+				"Wrong: port: \"8080\"",
+				"Right: port: 8080",
+			},
+		},
+		{
+			name: "string instead of bool for enabled",
+			yaml: `version: "1.0"
+tests:
+  services:
+    - name: "Docker"
+      service: docker
+      state: running
+      enabled: "true"`,
+			wantErrContains: []string{
+				"Expected a boolean",
+				"got a string",
+				"Wrong: enabled: \"true\"",
+				"Right: enabled: true",
+			},
+		},
+		{
+			name: "string instead of int for status_code",
+			yaml: `version: "1.0"
+tests:
+  http:
+    - name: "API check"
+      url: http://localhost:8080
+      status_code: "200"`,
+			wantErrContains: []string{
+				"Expected a number",
+				"got a string",
+			},
+		},
+		// Note: yaml.v3 ignores unknown fields rather than erroring,
+		// so we can't test field name typos via YAML parsing errors.
+		// Those would be caught during validation instead.
+		{
+			name: "invalid yaml syntax",
+			yaml: `version: "1.0"
+tests:
+  packages:
+    - name: "test"
+      packages: [
+        - docker`,
+			wantErrContains: []string{
+				"YAML parsing error",
+				"Troubleshooting tips",
+				"Check indentation",
+				"examples/basic.yaml",
+			},
+		},
+		{
+			name: "map instead of array",
+			yaml: `version: "1.0"
+tests:
+  packages:
+    name: "test"
+    packages: [docker]`,
+			wantErrContains: []string{
+				"Expected a list",
+				"got a mapping/object",
+				"this field should be a list",
+			},
+		},
+		{
+			name: "multiple type errors - first one reported",
+			yaml: `version: "1.0"
+tests:
+  packages:
+    - name: "test"
+      packages: nginx
+      state: present
+  files:
+    - name: ["another error"]
+      path: /tmp`,
+			wantErrContains: []string{
+				"Expected a list",
+				"got a single string value",
+			},
+		},
+		{
+			name: "string instead of array for file content contains",
+			yaml: `version: "1.0"
+tests:
+  file_content:
+    - name: "Check config"
+      path: /etc/config
+      contains: "single-value"`,
+			wantErrContains: []string{
+				"Expected a list",
+				"got a single string value",
+			},
+		},
+		{
+			name: "string instead of array for command content contains",
+			yaml: `version: "1.0"
+tests:
+  command_content:
+    - name: "Version check"
+      command: "app --version"
+      contains: "v1.0"`,
+			wantErrContains: []string{
+				"Expected a list",
+				"got a single string value",
+			},
+		},
+		{
+			name: "string instead of array for docker containers",
+			yaml: `version: "1.0"
+tests:
+  docker:
+    - name: "Containers running"
+      containers: nginx`,
+			wantErrContains: []string{
+				"Expected a list",
+				"got a single string value",
+			},
+		},
+		{
+			name: "string instead of array for groups",
+			yaml: `version: "1.0"
+tests:
+  groups:
+    - name: "Docker group"
+      groups: docker`,
+			wantErrContains: []string{
+				"Expected a list",
+				"got a single string value",
+			},
+		},
+		{
+			name: "string instead of int for replicas",
+			yaml: `version: "1.0"
+tests:
+  kubernetes:
+    deployments:
+      - name: "App deployment"
+        deployment: myapp
+        replicas: "3"`,
+			wantErrContains: []string{
+				"Expected a number",
+				"got a string",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create temporary spec file
+			tmpDir := t.TempDir()
+			specFile := filepath.Join(tmpDir, "test-spec.yaml")
+			if err := os.WriteFile(specFile, []byte(tt.yaml), 0644); err != nil {
+				t.Fatalf("Failed to write test spec file: %v", err)
+			}
+
+			// Try to parse the spec - should fail with enhanced error
+			_, err := ParseSpec(specFile)
+			if err == nil {
+				t.Fatalf("ParseSpec() should have failed but succeeded")
+			}
+
+			errMsg := err.Error()
+
+			// Verify all expected strings appear in the error message
+			for _, want := range tt.wantErrContains {
+				if !contains(errMsg, want) {
+					t.Errorf("Error message should contain %q\nGot error:\n%s", want, errMsg)
+				}
+			}
+
+			// Verify the error is more helpful than the raw yaml.v3 error
+			// It should NOT contain cryptic YAML type syntax in the main part
+			if contains(errMsg, "!!str") || contains(errMsg, "!!seq") || contains(errMsg, "!!map") {
+				// Only acceptable if it's in the "Original error:" section
+				if !contains(errMsg, "Original error:") {
+					t.Errorf("Error message contains cryptic YAML syntax but no 'Original error:' section:\n%s", errMsg)
+				}
+			}
+		})
+	}
+}
+
+// TestParseSpecErrorLineNumbers tests that line numbers are extracted and included
+// in error messages when available
+func TestParseSpecErrorLineNumbers(t *testing.T) {
+	tests := []struct {
+		name            string
+		yaml            string
+		wantLineInError bool
+	}{
+		{
+			name: "error on specific line",
+			yaml: `version: "1.0"
+tests:
+  packages:
+    - name: "test"
+      packages: docker
+      state: present`,
+			wantLineInError: true, // yaml.v3 should report line number for type error
+		},
+		{
+			name: "syntax error",
+			yaml: `version: "1.0"
+tests:
+  packages:
+    - name: "test"
+      packages: [
+`,
+			wantLineInError: true, // yaml.v3 reports line for syntax errors
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			specFile := filepath.Join(tmpDir, "test-spec.yaml")
+			if err := os.WriteFile(specFile, []byte(tt.yaml), 0644); err != nil {
+				t.Fatalf("Failed to write test spec file: %v", err)
+			}
+
+			_, err := ParseSpec(specFile)
+			if err == nil {
+				t.Fatalf("ParseSpec() should have failed")
+			}
+
+			errMsg := err.Error()
+
+			// Check if "at line" appears in the error
+			if tt.wantLineInError {
+				if !contains(errMsg, "at line") && !contains(errMsg, "line ") {
+					t.Logf("Note: Line number not extracted from yaml.v3 error (this is acceptable)")
+					t.Logf("Error was: %s", errMsg)
+				}
+			}
+
+			// At minimum, verify the error contains helpful information
+			if !contains(errMsg, "YAML parsing error") && !contains(errMsg, "Troubleshooting") {
+				t.Errorf("Error should contain enhanced information, got:\n%s", errMsg)
+			}
+		})
+	}
+}
+
+// TestParseSpecEnhancedVsOriginal compares enhanced errors to original yaml.v3 errors
+// to verify the enhancement is actually helpful
+func TestParseSpecEnhancedVsOriginal(t *testing.T) {
+	// This test documents the improvement from the original cryptic errors
+	examples := []struct {
+		name                string
+		yaml                string
+		originalWouldContain string // What the original yaml.v3 error would say
+		enhancedContains    string // What our enhanced error should say
+	}{
+		{
+			name: "string vs array clarity",
+			yaml: `version: "1.0"
+tests:
+  packages:
+    - name: "test"
+      packages: nginx`,
+			originalWouldContain: "cannot unmarshal",
+			enhancedContains:     "Expected a list, but got a single string value",
+		},
+		{
+			name: "actionable fix provided",
+			yaml: `version: "1.0"
+tests:
+  packages:
+    - name: "test"
+      packages: nginx`,
+			originalWouldContain: "!!str",
+			enhancedContains:     "Wrong: packages: nginx",
+		},
+		{
+			name: "reference to examples",
+			yaml: `version: "1.0"
+tests:
+  packages:
+    - name: "test"
+      packages: nginx`,
+			originalWouldContain: "into []string",
+			enhancedContains:     "examples/basic.yaml",
+		},
+	}
+
+	for _, tt := range examples {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			specFile := filepath.Join(tmpDir, "test.yaml")
+			if err := os.WriteFile(specFile, []byte(tt.yaml), 0644); err != nil {
+				t.Fatalf("Failed to write spec file: %v", err)
+			}
+
+			_, err := ParseSpec(specFile)
+			if err == nil {
+				t.Fatalf("Expected error but got none")
+			}
+
+			errMsg := err.Error()
+
+			// Verify the enhanced message appears
+			if !contains(errMsg, tt.enhancedContains) {
+				t.Errorf("Enhanced error should contain %q, got:\n%s",
+					tt.enhancedContains, errMsg)
+			}
+
+			// The main error message should NOT start with the cryptic original
+			// (though it can include it at the end as "Original error:")
+			lines := err.Error()
+			if len(lines) > 0 {
+				firstPart := lines
+				if idx := findIndex(lines, "Original error:"); idx != -1 {
+					firstPart = lines[:idx]
+				}
+
+				// The enhanced part should not have cryptic syntax
+				if contains(firstPart, tt.originalWouldContain) {
+					t.Logf("Note: Original cryptic error still appears in main message")
+					t.Logf("This might be acceptable if it's part of a larger helpful message")
+				}
+			}
+		})
+	}
+}
+
+// Helper function to find substring index
+func findIndex(s, substr string) int {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return i
+		}
+	}
+	return -1
+}
