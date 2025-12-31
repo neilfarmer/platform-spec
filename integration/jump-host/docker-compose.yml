@@ -11,10 +11,8 @@ services:
       - "2222:22"
     networks:
       - jump-net
-    volumes:
-      - ./ssh-keys/jump_key.pub:/home/testuser/.ssh/authorized_keys:ro
     healthcheck:
-      test: ["CMD", "ssh", "-o", "StrictHostKeyChecking=no", "-i", "/dev/null", "localhost", "exit", "0"]
+      test: ["CMD", "test", "-f", "/home/testuser/.ssh/authorized_keys"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -28,10 +26,8 @@ services:
     hostname: target-host
     networks:
       - jump-net
-    volumes:
-      - ./ssh-keys/target_key.pub:/home/testuser/.ssh/authorized_keys:ro
     healthcheck:
-      test: ["CMD", "ssh", "-o", "StrictHostKeyChecking=no", "-i", "/dev/null", "localhost", "exit", "0"]
+      test: ["CMD", "test", "-f", "/home/testuser/.ssh/authorized_keys"]
       interval: 5s
       timeout: 3s
       retries: 5

@@ -136,10 +136,19 @@ test-jump: build
 	fi
 	@echo ""
 	@echo "Building and starting containers..."
-	@cd integration/jump-host && docker-compose up -d --build
+	@cd integration/jump-host && docker compose up -d --build
 	@echo ""
 	@echo "Waiting for containers to be ready..."
 	@sleep 5
+	@echo ""
+	@echo "Copying SSH keys into containers..."
+	@docker cp integration/jump-host/ssh-keys/jump_key.pub platform-spec-jump:/tmp/authorized_keys
+	@docker exec platform-spec-jump sh -c 'mv /tmp/authorized_keys /home/testuser/.ssh/authorized_keys && chown testuser:testuser /home/testuser/.ssh/authorized_keys && chmod 600 /home/testuser/.ssh/authorized_keys'
+	@docker cp integration/jump-host/ssh-keys/target_key.pub platform-spec-target:/tmp/authorized_keys
+	@docker exec platform-spec-target sh -c 'mv /tmp/authorized_keys /home/testuser/.ssh/authorized_keys && chown testuser:testuser /home/testuser/.ssh/authorized_keys && chmod 600 /home/testuser/.ssh/authorized_keys'
+	@docker exec platform-spec-jump pkill -HUP sshd || true
+	@docker exec platform-spec-target pkill -HUP sshd || true
+	@sleep 2
 	@echo ""
 	@echo "Adding jump host to known_hosts..."
 	@ssh-keyscan -p 2222 -H localhost >> ~/.ssh/known_hosts 2>/dev/null || true
@@ -159,7 +168,7 @@ destroy-test-jump:
 	@echo "=== Tearing down Jump Host Test Environment ==="
 	@echo ""
 	@echo "Stopping and removing containers..."
-	@cd integration/jump-host && docker-compose down -v 2>/dev/null || true
+	@cd integration/jump-host && docker compose down -v 2>/dev/null || true
 	@echo ""
 	@echo "Removing SSH keypair..."
 	@rm -rf integration/jump-host/ssh-keys
