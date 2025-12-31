@@ -1,0 +1,32 @@
+version: "1.0"
+metadata:
+  name: Common Baseline Tests
+  description: Baseline security and compliance tests for all infrastructure
+  tags: ["baseline", "security", "compliance"]
+
+tests:
+  packages:
+    - name: Essential security tools installed
+      packages:
+        - curl
+        - wget
+        - vim
+      state: present
+
+  files:
+    - name: /tmp directory exists
+      path: /tmp
+      type: directory
+      mode: "1777"
+
+  users:
+    - name: Root user exists
+      user: root
+      shell: /bin/bash
+
+  groups:
+    - name: System groups present
+      groups:
+        - sudo
+        - docker
+      state: present

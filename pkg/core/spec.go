@@ -12,6 +12,7 @@ import (
 // Spec represents the parsed YAML specification
 type Spec struct {
 	Version   string                 `yaml:"version"`
+	Imports   []string               `yaml:"imports"`
 	Metadata  SpecMetadata           `yaml:"metadata"`
 	Config    SpecConfig             `yaml:"config"`
 	Variables map[string]interface{} `yaml:"variables"`
@@ -327,8 +328,71 @@ type KubernetesTests struct {
 	StatefulSets   []KubernetesStatefulSetTest   `yaml:"statefulsets"`
 }
 
-// ParseSpec parses a YAML spec file
+// ParseSpec parses a YAML spec file and processes imports
 func ParseSpec(path string) (*Spec, error) {
+	// Use an empty visited set for the initial call
+	visited := make(map[string]bool)
+	return parseSpecWithImports(path, visited)
+}
+
+// parseSpecWithImports recursively parses a spec file and its imports
+func parseSpecWithImports(path string, visited map[string]bool) (*Spec, error) {
+	// Clean the path to prevent directory traversal attacks (CWE-22)
+	cleanPath := filepath.Clean(path)
+
+	// Get absolute path for circular import detection
+	absPath, err := filepath.Abs(cleanPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve absolute path for %s: %w", cleanPath, err)
+	}
+
+	// Check for circular imports
+	if visited[absPath] {
+		return nil, fmt.Errorf("circular import detected: %s", cleanPath)
+	}
+
+	// Mark this file as visited
+	visited[absPath] = true
+
+	// Parse the spec file (without processing imports yet)
+	spec, err := parseSpecFile(cleanPath)
+	if err != nil {
+		return nil, err
+	}
+
+	// Process imports if any
+	if len(spec.Imports) > 0 {
+		// Get the directory of the current spec file for resolving relative paths
+		specDir := filepath.Dir(absPath)
+
+		// Parse all imported specs
+		var importedSpecs []*Spec
+		for _, importPath := range spec.Imports {
+			// Resolve import path (relative to current spec's directory or absolute)
+			resolvedPath := importPath
+			if !filepath.IsAbs(importPath) {
+				resolvedPath = filepath.Join(specDir, importPath)
+			}
+
+			// Recursively parse the imported spec
+			importedSpec, err := parseSpecWithImports(resolvedPath, visited)
+			if err != nil {
+				return nil, fmt.Errorf("failed to import %s: %w", importPath, err)
+			}
+
+			importedSpecs = append(importedSpecs, importedSpec)
+		}
+
+		// Merge imported specs into the main spec
+		// Imported tests execute first, so prepend them
+		spec = mergeSpecs(spec, importedSpecs)
+	}
+
+	return spec, nil
+}
+
+// parseSpecFile parses a single YAML spec file without processing imports
+func parseSpecFile(path string) (*Spec, error) {
 	// Clean the path to prevent directory traversal attacks (CWE-22)
 	cleanPath := filepath.Clean(path)
 
@@ -362,6 +426,111 @@ func ParseSpec(path string) (*Spec, error) {
 	}
 
 	return &spec, nil
+}
+
+// mergeSpecs merges imported specs into the main spec
+// Imported tests are prepended (execute first)
+// Main spec's metadata takes precedence, but tags are merged
+// Config values from main spec override imported values
+func mergeSpecs(mainSpec *Spec, importedSpecs []*Spec) *Spec {
+	merged := &Spec{
+		Version:  mainSpec.Version,
+		Metadata: mainSpec.Metadata,
+		Config:   mainSpec.Config,
+		Variables: make(map[string]interface{}),
+		Tests:    Tests{},
+	}
+
+	// Merge tags from all specs
+	tagSet := make(map[string]bool)
+	for _, imported := range importedSpecs {
+		for _, tag := range imported.Metadata.Tags {
+			tagSet[tag] = true
+		}
+	}
+	for _, tag := range mainSpec.Metadata.Tags {
+		tagSet[tag] = true
+	}
+	merged.Metadata.Tags = make([]string, 0, len(tagSet))
+	for tag := range tagSet {
+		merged.Metadata.Tags = append(merged.Metadata.Tags, tag)
+	}
+
+	// Merge variables (later files override earlier)
+	for _, imported := range importedSpecs {
+		for k, v := range imported.Variables {
+			merged.Variables[k] = v
+		}
+	}
+	for k, v := range mainSpec.Variables {
+		merged.Variables[k] = v
+	}
+
+	// Merge tests - imported tests first (prepend)
+	for _, imported := range importedSpecs {
+		merged.Tests.Packages = append(merged.Tests.Packages, imported.Tests.Packages...)
+		merged.Tests.Files = append(merged.Tests.Files, imported.Tests.Files...)
+		merged.Tests.Services = append(merged.Tests.Services, imported.Tests.Services...)
+		merged.Tests.Users = append(merged.Tests.Users, imported.Tests.Users...)
+		merged.Tests.Groups = append(merged.Tests.Groups, imported.Tests.Groups...)
+		merged.Tests.FileContent = append(merged.Tests.FileContent, imported.Tests.FileContent...)
+		merged.Tests.CommandContent = append(merged.Tests.CommandContent, imported.Tests.CommandContent...)
+		merged.Tests.Docker = append(merged.Tests.Docker, imported.Tests.Docker...)
+		merged.Tests.Filesystems = append(merged.Tests.Filesystems, imported.Tests.Filesystems...)
+		merged.Tests.Ping = append(merged.Tests.Ping, imported.Tests.Ping...)
+		merged.Tests.DNS = append(merged.Tests.DNS, imported.Tests.DNS...)
+		merged.Tests.SystemInfo = append(merged.Tests.SystemInfo, imported.Tests.SystemInfo...)
+		merged.Tests.HTTP = append(merged.Tests.HTTP, imported.Tests.HTTP...)
+		merged.Tests.Ports = append(merged.Tests.Ports, imported.Tests.Ports...)
+
+		// Merge Kubernetes tests
+		merged.Tests.Kubernetes.Pods = append(merged.Tests.Kubernetes.Pods, imported.Tests.Kubernetes.Pods...)
+		merged.Tests.Kubernetes.Deployments = append(merged.Tests.Kubernetes.Deployments, imported.Tests.Kubernetes.Deployments...)
+		merged.Tests.Kubernetes.Services = append(merged.Tests.Kubernetes.Services, imported.Tests.Kubernetes.Services...)
+		merged.Tests.Kubernetes.ConfigMaps = append(merged.Tests.Kubernetes.ConfigMaps, imported.Tests.Kubernetes.ConfigMaps...)
+		merged.Tests.Kubernetes.Namespaces = append(merged.Tests.Kubernetes.Namespaces, imported.Tests.Kubernetes.Namespaces...)
+		merged.Tests.Kubernetes.Nodes = append(merged.Tests.Kubernetes.Nodes, imported.Tests.Kubernetes.Nodes...)
+		merged.Tests.Kubernetes.CRDs = append(merged.Tests.Kubernetes.CRDs, imported.Tests.Kubernetes.CRDs...)
+		merged.Tests.Kubernetes.Helm = append(merged.Tests.Kubernetes.Helm, imported.Tests.Kubernetes.Helm...)
+		merged.Tests.Kubernetes.StorageClasses = append(merged.Tests.Kubernetes.StorageClasses, imported.Tests.Kubernetes.StorageClasses...)
+		merged.Tests.Kubernetes.Secrets = append(merged.Tests.Kubernetes.Secrets, imported.Tests.Kubernetes.Secrets...)
+		merged.Tests.Kubernetes.Ingress = append(merged.Tests.Kubernetes.Ingress, imported.Tests.Kubernetes.Ingress...)
+		merged.Tests.Kubernetes.PVCs = append(merged.Tests.Kubernetes.PVCs, imported.Tests.Kubernetes.PVCs...)
+		merged.Tests.Kubernetes.StatefulSets = append(merged.Tests.Kubernetes.StatefulSets, imported.Tests.Kubernetes.StatefulSets...)
+	}
+
+	// Append main spec's tests last
+	merged.Tests.Packages = append(merged.Tests.Packages, mainSpec.Tests.Packages...)
+	merged.Tests.Files = append(merged.Tests.Files, mainSpec.Tests.Files...)
+	merged.Tests.Services = append(merged.Tests.Services, mainSpec.Tests.Services...)
+	merged.Tests.Users = append(merged.Tests.Users, mainSpec.Tests.Users...)
+	merged.Tests.Groups = append(merged.Tests.Groups, mainSpec.Tests.Groups...)
+	merged.Tests.FileContent = append(merged.Tests.FileContent, mainSpec.Tests.FileContent...)
+	merged.Tests.CommandContent = append(merged.Tests.CommandContent, mainSpec.Tests.CommandContent...)
+	merged.Tests.Docker = append(merged.Tests.Docker, mainSpec.Tests.Docker...)
+	merged.Tests.Filesystems = append(merged.Tests.Filesystems, mainSpec.Tests.Filesystems...)
+	merged.Tests.Ping = append(merged.Tests.Ping, mainSpec.Tests.Ping...)
+	merged.Tests.DNS = append(merged.Tests.DNS, mainSpec.Tests.DNS...)
+	merged.Tests.SystemInfo = append(merged.Tests.SystemInfo, mainSpec.Tests.SystemInfo...)
+	merged.Tests.HTTP = append(merged.Tests.HTTP, mainSpec.Tests.HTTP...)
+	merged.Tests.Ports = append(merged.Tests.Ports, mainSpec.Tests.Ports...)
+
+	// Append main spec's Kubernetes tests
+	merged.Tests.Kubernetes.Pods = append(merged.Tests.Kubernetes.Pods, mainSpec.Tests.Kubernetes.Pods...)
+	merged.Tests.Kubernetes.Deployments = append(merged.Tests.Kubernetes.Deployments, mainSpec.Tests.Kubernetes.Deployments...)
+	merged.Tests.Kubernetes.Services = append(merged.Tests.Kubernetes.Services, mainSpec.Tests.Kubernetes.Services...)
+	merged.Tests.Kubernetes.ConfigMaps = append(merged.Tests.Kubernetes.ConfigMaps, mainSpec.Tests.Kubernetes.ConfigMaps...)
+	merged.Tests.Kubernetes.Namespaces = append(merged.Tests.Kubernetes.Namespaces, mainSpec.Tests.Kubernetes.Namespaces...)
+	merged.Tests.Kubernetes.Nodes = append(merged.Tests.Kubernetes.Nodes, mainSpec.Tests.Kubernetes.Nodes...)
+	merged.Tests.Kubernetes.CRDs = append(merged.Tests.Kubernetes.CRDs, mainSpec.Tests.Kubernetes.CRDs...)
+	merged.Tests.Kubernetes.Helm = append(merged.Tests.Kubernetes.Helm, mainSpec.Tests.Kubernetes.Helm...)
+	merged.Tests.Kubernetes.StorageClasses = append(merged.Tests.Kubernetes.StorageClasses, mainSpec.Tests.Kubernetes.StorageClasses...)
+	merged.Tests.Kubernetes.Secrets = append(merged.Tests.Kubernetes.Secrets, mainSpec.Tests.Kubernetes.Secrets...)
+	merged.Tests.Kubernetes.Ingress = append(merged.Tests.Kubernetes.Ingress, mainSpec.Tests.Kubernetes.Ingress...)
+	merged.Tests.Kubernetes.PVCs = append(merged.Tests.Kubernetes.PVCs, mainSpec.Tests.Kubernetes.PVCs...)
+	merged.Tests.Kubernetes.StatefulSets = append(merged.Tests.Kubernetes.StatefulSets, mainSpec.Tests.Kubernetes.StatefulSets...)
+
+	return merged
 }
 
 // Validate validates the spec

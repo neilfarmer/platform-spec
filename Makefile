@@ -1,4 +1,4 @@
-.PHONY: build clean test install release-build deploy-kind-cluster destroy-kind-cluster security-scan security-scan-vuln security-scan-static test-docker test-docker-local test-kubernetes test-integration test-inventory test-bad-inventory test-jump destroy-test-jump
+.PHONY: build clean test install release-build deploy-kind-cluster destroy-kind-cluster security-scan security-scan-vuln security-scan-static test-docker test-docker-local test-kubernetes test-integration test-inventory test-integration-imports test-bad-inventory test-jump destroy-test-jump
 
 # Cluster name for kind
 KIND_CLUSTER_NAME ?= platform-spec-test
@@ -94,6 +94,12 @@ test-inventory: build
 	@echo ""
 	@cd integration && ./test-inventory-realistic.sh
 
+# Import integration test
+test-integration-imports: build
+	@echo "=== Running Import Integration Test ==="
+	@echo ""
+	@cd integration && ./test-imports.sh
+
 # Bad inventory test - demonstrates multi-host table with mixed results
 test-bad-inventory: build
 	@echo "=== Running Bad Inventory Test (Mixed Pass/Fail Demo) ==="
@@ -111,7 +117,11 @@ test-bad-inventory: build
 	@cd integration && ./test-bad-inventory.sh
 
 # Run all integration tests (local)
-test-integration: test-docker-local test-kubernetes test-inventory
+test-integration: test-docker-local test-inventory test-integration-imports
+	@echo ""
+	@echo "Running Kubernetes integration tests (with cluster deploy/destroy)..."
+	@$(MAKE) test-kubernetes || ($(MAKE) destroy-kind-cluster && exit 1)
+	@$(MAKE) destroy-kind-cluster
 	@echo ""
 	@echo "✅ All integration tests completed successfully!"
 

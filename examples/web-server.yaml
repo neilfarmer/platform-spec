@@ -1,0 +1,46 @@
+version: "1.0"
+imports:
+  - common-baseline.yaml
+
+metadata:
+  name: Web Server Tests
+  description: Tests specific to web server infrastructure
+  tags: ["web", "nginx"]
+
+config:
+  fail_fast: false
+  timeout: 120
+
+tests:
+  packages:
+    - name: Nginx installed
+      packages:
+        - nginx
+      state: present
+
+  services:
+    - name: Nginx running
+      service: nginx
+      state: running
+      enabled: true
+
+  files:
+    - name: Nginx config exists
+      path: /etc/nginx/nginx.conf
+      type: file
+
+  ports:
+    - name: HTTP port listening
+      port: 80
+      protocol: tcp
+      state: listening
+
+    - name: HTTPS port listening
+      port: 443
+      protocol: tcp
+      state: listening
+
+  http:
+    - name: Localhost responds
+      url: http://localhost
+      status_code: 200

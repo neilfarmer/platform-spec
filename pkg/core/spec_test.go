@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -1998,4 +1999,530 @@ func findIndex(s, substr string) int {
 		}
 	}
 	return -1
+}
+
+// TestImports tests the import functionality
+func TestImports(t *testing.T) {
+	t.Run("basic single import", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create base spec
+		baseSpec := `version: "1.0"
+tests:
+  packages:
+    - name: "base package"
+      packages: [curl]
+      state: present`
+		baseFile := filepath.Join(tmpDir, "base.yaml")
+		if err := os.WriteFile(baseFile, []byte(baseSpec), 0644); err != nil {
+			t.Fatalf("Failed to create base spec: %v", err)
+		}
+
+		// Create main spec that imports base
+		mainSpec := `version: "1.0"
+imports:
+  - base.yaml
+tests:
+  packages:
+    - name: "main package"
+      packages: [git]
+      state: present`
+		mainFile := filepath.Join(tmpDir, "main.yaml")
+		if err := os.WriteFile(mainFile, []byte(mainSpec), 0644); err != nil {
+			t.Fatalf("Failed to create main spec: %v", err)
+		}
+
+		// Parse the main spec
+		spec, err := ParseSpec(mainFile)
+		if err != nil {
+			t.Fatalf("Failed to parse spec: %v", err)
+		}
+
+		// Verify both package tests are present
+		if len(spec.Tests.Packages) != 2 {
+			t.Errorf("Expected 2 package tests, got %d", len(spec.Tests.Packages))
+		}
+
+		// Verify imported test comes first
+		if len(spec.Tests.Packages) >= 2 {
+			if spec.Tests.Packages[0].Name != "base package" {
+				t.Errorf("Expected first test to be from imported spec, got %s", spec.Tests.Packages[0].Name)
+			}
+			if spec.Tests.Packages[1].Name != "main package" {
+				t.Errorf("Expected second test to be from main spec, got %s", spec.Tests.Packages[1].Name)
+			}
+		}
+	})
+
+	t.Run("multiple imports", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create first import
+		import1 := `version: "1.0"
+tests:
+  packages:
+    - name: "import1"
+      packages: [curl]`
+		import1File := filepath.Join(tmpDir, "import1.yaml")
+		if err := os.WriteFile(import1File, []byte(import1), 0644); err != nil {
+			t.Fatalf("Failed to create import1: %v", err)
+		}
+
+		// Create second import
+		import2 := `version: "1.0"
+tests:
+  files:
+    - name: "import2"
+      path: /tmp`
+		import2File := filepath.Join(tmpDir, "import2.yaml")
+		if err := os.WriteFile(import2File, []byte(import2), 0644); err != nil {
+			t.Fatalf("Failed to create import2: %v", err)
+		}
+
+		// Create main spec importing both
+		mainSpec := `version: "1.0"
+imports:
+  - import1.yaml
+  - import2.yaml
+tests:
+  services:
+    - name: "main"
+      service: nginx
+      state: running`
+		mainFile := filepath.Join(tmpDir, "main.yaml")
+		if err := os.WriteFile(mainFile, []byte(mainSpec), 0644); err != nil {
+			t.Fatalf("Failed to create main spec: %v", err)
+		}
+
+		spec, err := ParseSpec(mainFile)
+		if err != nil {
+			t.Fatalf("Failed to parse spec: %v", err)
+		}
+
+		// Verify all tests are present
+		if len(spec.Tests.Packages) != 1 {
+			t.Errorf("Expected 1 package test, got %d", len(spec.Tests.Packages))
+		}
+		if len(spec.Tests.Files) != 1 {
+			t.Errorf("Expected 1 file test, got %d", len(spec.Tests.Files))
+		}
+		if len(spec.Tests.Services) != 1 {
+			t.Errorf("Expected 1 service test, got %d", len(spec.Tests.Services))
+		}
+	})
+
+	t.Run("circular import detection", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create spec A that imports B
+		specA := `version: "1.0"
+imports:
+  - b.yaml
+tests:
+  packages:
+    - name: "a"
+      packages: [curl]`
+		fileA := filepath.Join(tmpDir, "a.yaml")
+		if err := os.WriteFile(fileA, []byte(specA), 0644); err != nil {
+			t.Fatalf("Failed to create spec A: %v", err)
+		}
+
+		// Create spec B that imports A (circular)
+		specB := `version: "1.0"
+imports:
+  - a.yaml
+tests:
+  packages:
+    - name: "b"
+      packages: [git]`
+		fileB := filepath.Join(tmpDir, "b.yaml")
+		if err := os.WriteFile(fileB, []byte(specB), 0644); err != nil {
+			t.Fatalf("Failed to create spec B: %v", err)
+		}
+
+		// Try to parse - should detect circular import
+		_, err := ParseSpec(fileA)
+		if err == nil {
+			t.Fatal("Expected error for circular import, got nil")
+		}
+		if !contains(err.Error(), "circular import") {
+			t.Errorf("Expected 'circular import' error, got: %v", err)
+		}
+	})
+
+	t.Run("nested imports", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create deepest spec (C)
+		specC := `version: "1.0"
+tests:
+  packages:
+    - name: "c"
+      packages: [vim]`
+		fileC := filepath.Join(tmpDir, "c.yaml")
+		if err := os.WriteFile(fileC, []byte(specC), 0644); err != nil {
+			t.Fatalf("Failed to create spec C: %v", err)
+		}
+
+		// Create middle spec (B) that imports C
+		specB := `version: "1.0"
+imports:
+  - c.yaml
+tests:
+  packages:
+    - name: "b"
+      packages: [git]`
+		fileB := filepath.Join(tmpDir, "b.yaml")
+		if err := os.WriteFile(fileB, []byte(specB), 0644); err != nil {
+			t.Fatalf("Failed to create spec B: %v", err)
+		}
+
+		// Create top spec (A) that imports B
+		specA := `version: "1.0"
+imports:
+  - b.yaml
+tests:
+  packages:
+    - name: "a"
+      packages: [curl]`
+		fileA := filepath.Join(tmpDir, "a.yaml")
+		if err := os.WriteFile(fileA, []byte(specA), 0644); err != nil {
+			t.Fatalf("Failed to create spec A: %v", err)
+		}
+
+		spec, err := ParseSpec(fileA)
+		if err != nil {
+			t.Fatalf("Failed to parse spec: %v", err)
+		}
+
+		// Verify all three packages are present
+		if len(spec.Tests.Packages) != 3 {
+			t.Errorf("Expected 3 package tests, got %d", len(spec.Tests.Packages))
+		}
+
+		// Verify order: C (imported by B) -> B (imported by A) -> A
+		expectedOrder := []string{"c", "b", "a"}
+		for i, expected := range expectedOrder {
+			if i >= len(spec.Tests.Packages) {
+				break
+			}
+			if spec.Tests.Packages[i].Name != expected {
+				t.Errorf("Expected package %d to be %s, got %s", i, expected, spec.Tests.Packages[i].Name)
+			}
+		}
+	})
+
+	t.Run("metadata and tag merging", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create import with tags
+		importSpec := `version: "1.0"
+metadata:
+  name: "Import Spec"
+  description: "Imported"
+  tags: ["baseline", "security"]
+tests:
+  packages:
+    - name: "import"
+      packages: [curl]`
+		importFile := filepath.Join(tmpDir, "import.yaml")
+		if err := os.WriteFile(importFile, []byte(importSpec), 0644); err != nil {
+			t.Fatalf("Failed to create import: %v", err)
+		}
+
+		// Create main spec with different metadata and tags
+		mainSpec := `version: "1.0"
+imports:
+  - import.yaml
+metadata:
+  name: "Main Spec"
+  description: "Main"
+  tags: ["web", "security"]
+tests:
+  packages:
+    - name: "main"
+      packages: [git]`
+		mainFile := filepath.Join(tmpDir, "main.yaml")
+		if err := os.WriteFile(mainFile, []byte(mainSpec), 0644); err != nil {
+			t.Fatalf("Failed to create main: %v", err)
+		}
+
+		spec, err := ParseSpec(mainFile)
+		if err != nil {
+			t.Fatalf("Failed to parse spec: %v", err)
+		}
+
+		// Verify main spec's metadata takes precedence
+		if spec.Metadata.Name != "Main Spec" {
+			t.Errorf("Expected name 'Main Spec', got %s", spec.Metadata.Name)
+		}
+		if spec.Metadata.Description != "Main" {
+			t.Errorf("Expected description 'Main', got %s", spec.Metadata.Description)
+		}
+
+		// Verify tags are merged
+		expectedTags := map[string]bool{"baseline": true, "security": true, "web": true}
+		if len(spec.Metadata.Tags) != len(expectedTags) {
+			t.Errorf("Expected %d tags, got %d", len(expectedTags), len(spec.Metadata.Tags))
+		}
+		for _, tag := range spec.Metadata.Tags {
+			if !expectedTags[tag] {
+				t.Errorf("Unexpected tag: %s", tag)
+			}
+		}
+	})
+
+	t.Run("config and variable merging", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create import with config and variables
+		importSpec := `version: "1.0"
+config:
+  fail_fast: true
+  timeout: 100
+variables:
+  env: "dev"
+  region: "us-west"
+tests:
+  packages:
+    - name: "import"
+      packages: [curl]`
+		importFile := filepath.Join(tmpDir, "import.yaml")
+		if err := os.WriteFile(importFile, []byte(importSpec), 0644); err != nil {
+			t.Fatalf("Failed to create import: %v", err)
+		}
+
+		// Create main spec with different config/variables
+		mainSpec := `version: "1.0"
+imports:
+  - import.yaml
+config:
+  fail_fast: false
+  timeout: 200
+variables:
+  env: "prod"
+  app: "web"
+tests:
+  packages:
+    - name: "main"
+      packages: [git]`
+		mainFile := filepath.Join(tmpDir, "main.yaml")
+		if err := os.WriteFile(mainFile, []byte(mainSpec), 0644); err != nil {
+			t.Fatalf("Failed to create main: %v", err)
+		}
+
+		spec, err := ParseSpec(mainFile)
+		if err != nil {
+			t.Fatalf("Failed to parse spec: %v", err)
+		}
+
+		// Verify main spec's config overrides imported
+		if spec.Config.FailFast != false {
+			t.Errorf("Expected fail_fast=false, got %v", spec.Config.FailFast)
+		}
+		if spec.Config.Timeout != 200 {
+			t.Errorf("Expected timeout=200, got %d", spec.Config.Timeout)
+		}
+
+		// Verify variables are merged with main overriding
+		if spec.Variables["env"] != "prod" {
+			t.Errorf("Expected env=prod, got %v", spec.Variables["env"])
+		}
+		if spec.Variables["region"] != "us-west" {
+			t.Errorf("Expected region=us-west, got %v", spec.Variables["region"])
+		}
+		if spec.Variables["app"] != "web" {
+			t.Errorf("Expected app=web, got %v", spec.Variables["app"])
+		}
+	})
+
+	t.Run("subdirectory relative import", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create subdirectory
+		subDir := filepath.Join(tmpDir, "common")
+		if err := os.MkdirAll(subDir, 0755); err != nil {
+			t.Fatalf("Failed to create subdirectory: %v", err)
+		}
+
+		// Create spec in subdirectory
+		baseSpec := `version: "1.0"
+tests:
+  packages:
+    - name: "base"
+      packages: [curl]`
+		baseFile := filepath.Join(subDir, "base.yaml")
+		if err := os.WriteFile(baseFile, []byte(baseSpec), 0644); err != nil {
+			t.Fatalf("Failed to create base spec: %v", err)
+		}
+
+		// Create main spec that imports from subdirectory
+		mainSpec := `version: "1.0"
+imports:
+  - common/base.yaml
+tests:
+  packages:
+    - name: "main"
+      packages: [git]`
+		mainFile := filepath.Join(tmpDir, "main.yaml")
+		if err := os.WriteFile(mainFile, []byte(mainSpec), 0644); err != nil {
+			t.Fatalf("Failed to create main spec: %v", err)
+		}
+
+		spec, err := ParseSpec(mainFile)
+		if err != nil {
+			t.Fatalf("Failed to parse spec: %v", err)
+		}
+
+		if len(spec.Tests.Packages) != 2 {
+			t.Errorf("Expected 2 package tests, got %d", len(spec.Tests.Packages))
+		}
+	})
+
+	t.Run("absolute path import", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create base spec
+		baseSpec := `version: "1.0"
+tests:
+  packages:
+    - name: "base"
+      packages: [curl]`
+		baseFile := filepath.Join(tmpDir, "base.yaml")
+		if err := os.WriteFile(baseFile, []byte(baseSpec), 0644); err != nil {
+			t.Fatalf("Failed to create base spec: %v", err)
+		}
+
+		// Create main spec with absolute import path
+		mainSpec := fmt.Sprintf(`version: "1.0"
+imports:
+  - %s
+tests:
+  packages:
+    - name: "main"
+      packages: [git]`, baseFile)
+		mainFile := filepath.Join(tmpDir, "main.yaml")
+		if err := os.WriteFile(mainFile, []byte(mainSpec), 0644); err != nil {
+			t.Fatalf("Failed to create main spec: %v", err)
+		}
+
+		spec, err := ParseSpec(mainFile)
+		if err != nil {
+			t.Fatalf("Failed to parse spec with absolute path: %v", err)
+		}
+
+		if len(spec.Tests.Packages) != 2 {
+			t.Errorf("Expected 2 package tests, got %d", len(spec.Tests.Packages))
+		}
+	})
+
+	t.Run("import nonexistent file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		mainSpec := `version: "1.0"
+imports:
+  - nonexistent.yaml
+tests:
+  packages:
+    - name: "main"
+      packages: [git]`
+		mainFile := filepath.Join(tmpDir, "main.yaml")
+		if err := os.WriteFile(mainFile, []byte(mainSpec), 0644); err != nil {
+			t.Fatalf("Failed to create main spec: %v", err)
+		}
+
+		_, err := ParseSpec(mainFile)
+		if err == nil {
+			t.Fatal("Expected error for nonexistent import, got nil")
+		}
+		if !contains(err.Error(), "failed to import") {
+			t.Errorf("Expected 'failed to import' error, got: %v", err)
+		}
+	})
+
+	t.Run("all test types merge correctly", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create import with various test types
+		importSpec := `version: "1.0"
+tests:
+  packages:
+    - name: "import package"
+      packages: [curl]
+  files:
+    - name: "import file"
+      path: /tmp
+  services:
+    - name: "import service"
+      service: nginx
+      state: running
+  docker:
+    - name: "import docker"
+      container: redis
+      state: running
+  kubernetes:
+    pods:
+      - name: "import pod"
+        pod: nginx-pod`
+		importFile := filepath.Join(tmpDir, "import.yaml")
+		if err := os.WriteFile(importFile, []byte(importSpec), 0644); err != nil {
+			t.Fatalf("Failed to create import: %v", err)
+		}
+
+		// Create main spec with different test types
+		mainSpec := `version: "1.0"
+imports:
+  - import.yaml
+tests:
+  packages:
+    - name: "main package"
+      packages: [git]
+  users:
+    - name: "main user"
+      user: admin
+  kubernetes:
+    deployments:
+      - name: "main deployment"
+        deployment: app`
+		mainFile := filepath.Join(tmpDir, "main.yaml")
+		if err := os.WriteFile(mainFile, []byte(mainSpec), 0644); err != nil {
+			t.Fatalf("Failed to create main: %v", err)
+		}
+
+		spec, err := ParseSpec(mainFile)
+		if err != nil {
+			t.Fatalf("Failed to parse spec: %v", err)
+		}
+
+		// Verify all test types are present
+		if len(spec.Tests.Packages) != 2 {
+			t.Errorf("Expected 2 packages, got %d", len(spec.Tests.Packages))
+		}
+		if len(spec.Tests.Files) != 1 {
+			t.Errorf("Expected 1 file, got %d", len(spec.Tests.Files))
+		}
+		if len(spec.Tests.Services) != 1 {
+			t.Errorf("Expected 1 service, got %d", len(spec.Tests.Services))
+		}
+		if len(spec.Tests.Users) != 1 {
+			t.Errorf("Expected 1 user, got %d", len(spec.Tests.Users))
+		}
+		if len(spec.Tests.Docker) != 1 {
+			t.Errorf("Expected 1 docker, got %d", len(spec.Tests.Docker))
+		}
+		if len(spec.Tests.Kubernetes.Pods) != 1 {
+			t.Errorf("Expected 1 k8s pod, got %d", len(spec.Tests.Kubernetes.Pods))
+		}
+		if len(spec.Tests.Kubernetes.Deployments) != 1 {
+			t.Errorf("Expected 1 k8s deployment, got %d", len(spec.Tests.Kubernetes.Deployments))
+		}
+
+		// Verify order: imported tests first
+		if spec.Tests.Packages[0].Name != "import package" {
+			t.Errorf("Expected first package to be from import, got %s", spec.Tests.Packages[0].Name)
+		}
+		if spec.Tests.Packages[1].Name != "main package" {
+			t.Errorf("Expected second package to be from main, got %s", spec.Tests.Packages[1].Name)
+		}
+	})
 }
