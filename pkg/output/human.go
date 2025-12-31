@@ -16,6 +16,17 @@ const (
 	colorBold   = "\033[1m"
 )
 
+// Global flag to control color output
+var NoColor = false
+
+// applyColor returns the colored string if colors are enabled, otherwise returns plain string
+func applyColor(color, text string) string {
+	if NoColor {
+		return text
+	}
+	return color + text + colorReset
+}
+
 // FormatHuman formats test results in human-readable format
 func FormatHuman(results *core.TestResults) string {
 	var sb strings.Builder
@@ -35,11 +46,11 @@ func FormatHuman(results *core.TestResults) string {
 	for _, result := range results.Results {
 		symbol := getStatusSymbol(result.Status)
 		color := getStatusColor(result.Status)
-		sb.WriteString(fmt.Sprintf("%s%s %s%s (%.2fs)\n",
-			color, symbol, result.Name, colorReset, result.Duration.Seconds()))
+		sb.WriteString(fmt.Sprintf("%s (%.2fs)\n",
+			applyColor(color, symbol+" "+result.Name), result.Duration.Seconds()))
 
 		if result.Message != "" && result.Status != core.StatusPass {
-			sb.WriteString(fmt.Sprintf("  %s%s%s\n", color, result.Message, colorReset))
+			sb.WriteString(fmt.Sprintf("  %s\n", applyColor(color, result.Message)))
 		}
 	}
 
@@ -51,11 +62,13 @@ func FormatHuman(results *core.TestResults) string {
 		passed, failed, skipped, errors))
 	sb.WriteString(fmt.Sprintf("Duration: %.2fs\n", results.Duration.Seconds()))
 
+	sb.WriteString("\n")
 	if results.Success() {
-		sb.WriteString(fmt.Sprintf("Status: %s%sPASSED%s\n", colorBold, colorGreen, colorReset))
+		sb.WriteString(applyColor(colorBold+colorGreen, "✅ PASSED"))
 	} else {
-		sb.WriteString(fmt.Sprintf("Status: %s%sFAILED%s\n", colorBold, colorRed, colorReset))
+		sb.WriteString(applyColor(colorBold+colorRed, "❌ FAILED"))
 	}
+	sb.WriteString("\n")
 
 	return sb.String()
 }
@@ -88,4 +101,14 @@ func getStatusColor(status core.Status) string {
 	default:
 		return colorReset
 	}
+}
+
+// PrintFailed prints a FAILED status message (for connection errors and other failures)
+func PrintFailed() string {
+	return "\n" + applyColor(colorBold+colorRed, "❌ FAILED") + "\n"
+}
+
+// PrintPassed prints a PASSED status message
+func PrintPassed() string {
+	return "\n" + applyColor(colorBold+colorGreen, "✅ PASSED") + "\n"
 }

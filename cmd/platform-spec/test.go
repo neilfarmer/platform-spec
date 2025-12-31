@@ -38,6 +38,7 @@ var (
 	// Output flags
 	outputFormat string
 	verbose      bool
+	noColor      bool
 )
 
 var testCmd = &cobra.Command{
@@ -105,10 +106,12 @@ func init() {
 	// Output flags (shared across all test commands)
 	remoteCmd.Flags().StringVarP(&outputFormat, "output", "o", "human", "Output format (human, json, junit)")
 	remoteCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Verbose output")
+	remoteCmd.Flags().BoolVar(&noColor, "no-color", false, "Disable colored output")
 
 	// Local command flags
 	localCmd.Flags().StringVarP(&outputFormat, "output", "o", "human", "Output format (human, json, junit)")
 	localCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Verbose output")
+	localCmd.Flags().BoolVar(&noColor, "no-color", false, "Disable colored output")
 
 	// Kubernetes command flags
 	kubernetesCmd.Flags().StringVar(&kubeconfig, "kubeconfig", "", "Path to kubeconfig file (default: ~/.kube/config)")
@@ -116,6 +119,7 @@ func init() {
 	kubernetesCmd.Flags().StringVar(&kubeNamespace, "namespace", "", "Default namespace for tests")
 	kubernetesCmd.Flags().StringVarP(&outputFormat, "output", "o", "human", "Output format (human, json, junit)")
 	kubernetesCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Verbose output")
+	kubernetesCmd.Flags().BoolVar(&noColor, "no-color", false, "Disable colored output")
 
 	// Add subcommands to test
 	testCmd.AddCommand(remoteCmd)
@@ -128,6 +132,9 @@ func init() {
 func runRemoteTest(cmd *cobra.Command, args []string) {
 	target := args[0]
 	specFiles := args[1:]
+
+	// Set color output preference
+	output.NoColor = noColor
 
 	// Parse and validate spec files FIRST (fail fast)
 	var specs []*core.Spec
@@ -199,6 +206,7 @@ func runRemoteTest(cmd *cobra.Command, args []string) {
 	ctx := context.Background()
 	if err := remoteProvider.Connect(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to connect: %v\n", err)
+		fmt.Print(output.PrintFailed())
 		os.Exit(1)
 	}
 	defer remoteProvider.Close()
@@ -216,6 +224,7 @@ func runRemoteTest(cmd *cobra.Command, args []string) {
 		results, err := executor.Execute(ctx)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to execute tests: %v\n", err)
+			fmt.Print(output.PrintFailed())
 			os.Exit(1)
 		}
 
@@ -246,6 +255,9 @@ func runRemoteTest(cmd *cobra.Command, args []string) {
 func runLocalTest(cmd *cobra.Command, args []string) {
 	specFiles := args
 
+	// Set color output preference
+	output.NoColor = noColor
+
 	if verbose {
 		fmt.Printf("Target: localhost\n")
 		fmt.Printf("Spec files: %v\n", specFiles)
@@ -263,6 +275,7 @@ func runLocalTest(cmd *cobra.Command, args []string) {
 		spec, err := core.ParseSpec(specFile)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to parse spec %s: %v\n", specFile, err)
+			fmt.Print(output.PrintFailed())
 			os.Exit(1)
 		}
 
@@ -271,6 +284,7 @@ func runLocalTest(cmd *cobra.Command, args []string) {
 		results, err := executor.Execute(ctx)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to execute tests: %v\n", err)
+			fmt.Print(output.PrintFailed())
 			os.Exit(1)
 		}
 
@@ -300,6 +314,9 @@ func runLocalTest(cmd *cobra.Command, args []string) {
 
 func runKubernetesTest(cmd *cobra.Command, args []string) {
 	specFiles := args
+
+	// Set color output preference
+	output.NoColor = noColor
 
 	// Set default kubeconfig if not specified
 	if kubeconfig == "" {
@@ -339,6 +356,7 @@ func runKubernetesTest(cmd *cobra.Command, args []string) {
 		spec, err := core.ParseSpec(specFile)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to parse spec %s: %v\n", specFile, err)
+			fmt.Print(output.PrintFailed())
 			os.Exit(1)
 		}
 
@@ -355,6 +373,7 @@ func runKubernetesTest(cmd *cobra.Command, args []string) {
 		results, err := executor.Execute(ctx)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to execute tests: %v\n", err)
+			fmt.Print(output.PrintFailed())
 			os.Exit(1)
 		}
 
