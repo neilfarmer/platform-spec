@@ -116,14 +116,23 @@ security-scan: security-scan-vuln security-scan-static
 test-jump: build
 	@echo "=== Setting up Jump Host Test Environment ==="
 	@echo ""
-	@echo "Creating SSH keypair..."
+	@echo "Creating SSH keypairs (jump and target)..."
 	@mkdir -p integration/jump-host/ssh-keys
-	@if [ ! -f integration/jump-host/ssh-keys/id_rsa ]; then \
-		ssh-keygen -t rsa -b 2048 -f integration/jump-host/ssh-keys/id_rsa -N "" -C "platform-spec-test"; \
-		chmod 600 integration/jump-host/ssh-keys/id_rsa; \
-		chmod 644 integration/jump-host/ssh-keys/id_rsa.pub; \
+	@if [ ! -f integration/jump-host/ssh-keys/jump_key ]; then \
+		ssh-keygen -t rsa -b 2048 -f integration/jump-host/ssh-keys/jump_key -N "" -C "platform-spec-jump"; \
+		chmod 600 integration/jump-host/ssh-keys/jump_key; \
+		chmod 644 integration/jump-host/ssh-keys/jump_key.pub; \
+		echo "Created jump_key"; \
 	else \
-		echo "SSH keypair already exists"; \
+		echo "jump_key already exists"; \
+	fi
+	@if [ ! -f integration/jump-host/ssh-keys/target_key ]; then \
+		ssh-keygen -t rsa -b 2048 -f integration/jump-host/ssh-keys/target_key -N "" -C "platform-spec-target"; \
+		chmod 600 integration/jump-host/ssh-keys/target_key; \
+		chmod 644 integration/jump-host/ssh-keys/target_key.pub; \
+		echo "Created target_key"; \
+	else \
+		echo "target_key already exists"; \
 	fi
 	@echo ""
 	@echo "Building and starting containers..."
@@ -137,11 +146,11 @@ test-jump: build
 	@echo ""
 	@echo "✅ Jump host test environment is ready!"
 	@echo ""
-	@echo "Test the jump host connection with:"
-	@echo "  ./dist/platform-spec test remote -J testuser@localhost --jump-port 2222 testuser@target-host integration/jump-host/spec.yaml -i integration/jump-host/ssh-keys/id_rsa --insecure-ignore-host-key --verbose"
+	@echo "Test with SEPARATE keys (jump-key for jump host, target-key for target):"
+	@echo "  ./dist/platform-spec test remote -J testuser@localhost --jump-port 2222 --jump-identity integration/jump-host/ssh-keys/jump_key -i integration/jump-host/ssh-keys/target_key testuser@target-host integration/jump-host/spec.yaml --insecure-ignore-host-key --verbose"
 	@echo ""
-	@echo "Or test direct connection to jump host:"
-	@echo "  ssh -i integration/jump-host/ssh-keys/id_rsa -p 2222 testuser@localhost"
+	@echo "Or test direct connections:"
+	@echo "  ssh -i integration/jump-host/ssh-keys/jump_key -p 2222 testuser@localhost"
 	@echo ""
 	@echo "When done, run: make destroy-test-jump"
 

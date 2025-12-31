@@ -1,6 +1,10 @@
 package remote
 
-import "testing"
+import (
+	"fmt"
+	"os/exec"
+	"testing"
+)
 
 func TestParseTarget(t *testing.T) {
 	tests := []struct {
@@ -86,14 +90,16 @@ func TestNewProvider(t *testing.T) {
 
 func TestNewProviderWithJumpHost(t *testing.T) {
 	tests := []struct {
-		name           string
-		config         *Config
-		wantJumpHost   string
-		wantJumpPort   int
-		wantJumpUser   string
-		wantTargetHost string
-		wantTargetPort int
-		wantTargetUser string
+		name               string
+		config             *Config
+		wantJumpHost       string
+		wantJumpPort       int
+		wantJumpUser       string
+		wantJumpIdentity   string
+		wantTargetHost     string
+		wantTargetPort     int
+		wantTargetUser     string
+		wantTargetIdentity string
 	}{
 		{
 			name: "with jump host configuration",
@@ -105,12 +111,14 @@ func TestNewProviderWithJumpHost(t *testing.T) {
 				JumpPort: 22,
 				JumpUser: "jumpuser",
 			},
-			wantJumpHost:   "jump-host",
-			wantJumpPort:   22,
-			wantJumpUser:   "jumpuser",
-			wantTargetHost: "target-host",
-			wantTargetPort: 22,
-			wantTargetUser: "targetuser",
+			wantJumpHost:       "jump-host",
+			wantJumpPort:       22,
+			wantJumpUser:       "jumpuser",
+			wantJumpIdentity:   "",
+			wantTargetHost:     "target-host",
+			wantTargetPort:     22,
+			wantTargetUser:     "targetuser",
+			wantTargetIdentity: "",
 		},
 		{
 			name: "with jump host and custom port",
@@ -122,12 +130,35 @@ func TestNewProviderWithJumpHost(t *testing.T) {
 				JumpPort: 2223,
 				JumpUser: "jumpuser",
 			},
-			wantJumpHost:   "jump-host",
-			wantJumpPort:   2223,
-			wantJumpUser:   "jumpuser",
-			wantTargetHost: "target-host",
-			wantTargetPort: 2222,
-			wantTargetUser: "targetuser",
+			wantJumpHost:       "jump-host",
+			wantJumpPort:       2223,
+			wantJumpUser:       "jumpuser",
+			wantJumpIdentity:   "",
+			wantTargetHost:     "target-host",
+			wantTargetPort:     2222,
+			wantTargetUser:     "targetuser",
+			wantTargetIdentity: "",
+		},
+		{
+			name: "with separate jump and target identity files",
+			config: &Config{
+				Host:             "target-host",
+				Port:             22,
+				User:             "targetuser",
+				IdentityFile:     "/path/to/target/key",
+				JumpHost:         "jump-host",
+				JumpPort:         22,
+				JumpUser:         "jumpuser",
+				JumpIdentityFile: "/path/to/jump/key",
+			},
+			wantJumpHost:       "jump-host",
+			wantJumpPort:       22,
+			wantJumpUser:       "jumpuser",
+			wantJumpIdentity:   "/path/to/jump/key",
+			wantTargetHost:     "target-host",
+			wantTargetPort:     22,
+			wantTargetUser:     "targetuser",
+			wantTargetIdentity: "/path/to/target/key",
 		},
 		{
 			name: "without jump host",
@@ -136,12 +167,14 @@ func TestNewProviderWithJumpHost(t *testing.T) {
 				Port: 22,
 				User: "directuser",
 			},
-			wantJumpHost:   "",
-			wantJumpPort:   0,
-			wantJumpUser:   "",
-			wantTargetHost: "direct-host",
-			wantTargetPort: 22,
-			wantTargetUser: "directuser",
+			wantJumpHost:       "",
+			wantJumpPort:       0,
+			wantJumpUser:       "",
+			wantJumpIdentity:   "",
+			wantTargetHost:     "direct-host",
+			wantTargetPort:     22,
+			wantTargetUser:     "directuser",
+			wantTargetIdentity: "",
 		},
 	}
 
@@ -162,6 +195,9 @@ func TestNewProviderWithJumpHost(t *testing.T) {
 			if provider.config.JumpUser != tt.wantJumpUser {
 				t.Errorf("config.JumpUser = %v, want %v", provider.config.JumpUser, tt.wantJumpUser)
 			}
+			if provider.config.JumpIdentityFile != tt.wantJumpIdentity {
+				t.Errorf("config.JumpIdentityFile = %v, want %v", provider.config.JumpIdentityFile, tt.wantJumpIdentity)
+			}
 			if provider.config.Host != tt.wantTargetHost {
 				t.Errorf("config.Host = %v, want %v", provider.config.Host, tt.wantTargetHost)
 			}
@@ -171,6 +207,102 @@ func TestNewProviderWithJumpHost(t *testing.T) {
 			if provider.config.User != tt.wantTargetUser {
 				t.Errorf("config.User = %v, want %v", provider.config.User, tt.wantTargetUser)
 			}
+			if provider.config.IdentityFile != tt.wantTargetIdentity {
+				t.Errorf("config.IdentityFile = %v, want %v", provider.config.IdentityFile, tt.wantTargetIdentity)
+			}
 		})
 	}
+}
+
+func TestBuildAuthMethods(t *testing.T) {
+	// Create a temporary SSH key for testing
+	tmpDir := t.TempDir()
+	keyPath := tmpDir + "/test_key"
+
+	// Generate a test key
+	if err := generateTestSSHKey(keyPath); err != nil {
+		t.Fatalf("Failed to generate test SSH key: %v", err)
+	}
+
+	tests := []struct {
+		name         string
+		identityFile string
+		hostType     string
+		wantErr      bool
+		errContains  string
+	}{
+		{
+			name:         "valid key file",
+			identityFile: keyPath,
+			hostType:     "test host",
+			wantErr:      false,
+		},
+		{
+			name:         "missing key file",
+			identityFile: tmpDir + "/nonexistent",
+			hostType:     "test host",
+			wantErr:      true,
+			errContains:  "failed to read private key for test host",
+		},
+		{
+			name:         "empty identity file uses SSH agent",
+			identityFile: "",
+			hostType:     "test host",
+			wantErr:      false, // Will use SSH agent if available, or fail
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			provider := NewProvider(&Config{})
+			authMethods, err := provider.buildAuthMethods(tt.identityFile, tt.hostType)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("buildAuthMethods() expected error but got nil")
+					return
+				}
+				if tt.errContains != "" && !containsString(err.Error(), tt.errContains) {
+					t.Errorf("buildAuthMethods() error = %v, want to contain %v", err, tt.errContains)
+				}
+			} else {
+				if err != nil {
+					// If no key file and no SSH agent, this is expected to fail
+					if tt.identityFile == "" {
+						t.Logf("buildAuthMethods() with empty identity file failed (expected if no SSH agent): %v", err)
+						return
+					}
+					t.Errorf("buildAuthMethods() unexpected error = %v", err)
+					return
+				}
+				if len(authMethods) == 0 {
+					t.Errorf("buildAuthMethods() returned empty auth methods")
+				}
+			}
+		})
+	}
+}
+
+// generateTestSSHKey generates a test RSA private key
+func generateTestSSHKey(path string) error {
+	// Use ssh-keygen to generate a test key
+	cmd := fmt.Sprintf("ssh-keygen -t rsa -b 2048 -f %s -N '' -q", path)
+	if err := exec.Command("sh", "-c", cmd).Run(); err != nil {
+		return fmt.Errorf("failed to generate SSH key: %w", err)
+	}
+	return nil
+}
+
+// containsString checks if a string contains a substring
+func containsString(s, substr string) bool {
+	return len(substr) == 0 || (len(s) >= len(substr) && findSubstring(s, substr))
+}
+
+func findSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }

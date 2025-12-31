@@ -12,7 +12,7 @@ services:
     networks:
       - jump-net
     volumes:
-      - ./ssh-keys/id_rsa.pub:/home/testuser/.ssh/authorized_keys:ro
+      - ./ssh-keys/jump_key.pub:/home/testuser/.ssh/authorized_keys:ro
     healthcheck:
       test: ["CMD", "ssh", "-o", "StrictHostKeyChecking=no", "-i", "/dev/null", "localhost", "exit", "0"]
       interval: 5s
@@ -29,7 +29,7 @@ services:
     networks:
       - jump-net
     volumes:
-      - ./ssh-keys/id_rsa.pub:/home/testuser/.ssh/authorized_keys:ro
+      - ./ssh-keys/target_key.pub:/home/testuser/.ssh/authorized_keys:ro
     healthcheck:
       test: ["CMD", "ssh", "-o", "StrictHostKeyChecking=no", "-i", "/dev/null", "localhost", "exit", "0"]
       interval: 5s
