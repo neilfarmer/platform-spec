@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.6.0](https://github.com/neilfarmer/platform-spec/compare/v0.5.0...v0.6.0) (2025-12-31)
+
+
+### Features
+
+* Add multi key ssh jumping ([b69b58d](https://github.com/neilfarmer/platform-spec/commit/b69b58ddda4bd6595b5bffde88b3338e07159d3c))
+* Add ssh jump feature ([015bbae](https://github.com/neilfarmer/platform-spec/commit/015bbae929dc2c93a15e7e247af23340b1981850))
+* Respect SSH config Host and HostName directives for hostname re… ([d373f3f](https://github.com/neilfarmer/platform-spec/commit/d373f3fcf778c914e00207457fef98f9ad1e34e5))
+* Respect SSH config Host and HostName directives for hostname resolution ([685e99d](https://github.com/neilfarmer/platform-spec/commit/685e99d701a1f49b2aa3b91514d33630c4d2777d))
+
+
+### Bug Fixes
+
+* Fix security issues ([330bafc](https://github.com/neilfarmer/platform-spec/commit/330bafc5661ef73672cc7f935feb1f68c9712fbc))
+
 ## [0.5.0](https://github.com/neilfarmer/platform-spec/compare/v0.4.0...v0.5.0) (2025-12-28)
 
 
