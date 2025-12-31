@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/neilfarmer/platform-spec/pkg/core"
 )
 
@@ -145,24 +146,43 @@ func FormatMultiHostHuman(results *core.MultiHostResults) string {
 		sb.WriteString(fmt.Sprintf("Connection errors: %d\n", connectionErrors))
 	}
 
-	// Results table with borders and word wrapping
+	// Results table using go-pretty
 	sb.WriteString("\n")
 
-	const (
-		hostWidth    = 35
-		statusWidth  = 12
-		detailsWidth = 50
-	)
+	t := table.NewWriter()
+	t.SetOutputMirror(&sb)
+	t.AppendHeader(table.Row{"Host", "Status", "Details"})
 
-	// Top border
-	sb.WriteString("+" + strings.Repeat("-", hostWidth+2) + "+" + strings.Repeat("-", statusWidth+2) + "+" + strings.Repeat("-", detailsWidth+2) + "+\n")
+	// Configure table style with ASCII borders (+ | -)
+	style := table.Style{
+		Name: "ASCII",
+		Box: table.BoxStyle{
+			BottomLeft:       "+",
+			BottomRight:      "+",
+			BottomSeparator:  "+",
+			Left:             "|",
+			LeftSeparator:    "+",
+			MiddleHorizontal: "-",
+			MiddleSeparator:  "+",
+			MiddleVertical:   "|",
+			PaddingLeft:      " ",
+			PaddingRight:     " ",
+			Right:            "|",
+			RightSeparator:   "+",
+			TopLeft:          "+",
+			TopRight:         "+",
+			TopSeparator:     "+",
+		},
+		Options: table.Options{
+			DrawBorder:      true,
+			SeparateColumns: true,
+			SeparateHeader:  true,
+			SeparateRows:    false,
+		},
+	}
+	t.SetStyle(style)
 
-	// Header
-	sb.WriteString(fmt.Sprintf("| %-*s | %-*s | %-*s |\n", hostWidth, "Host", statusWidth, "Status", detailsWidth, "Details"))
-
-	// Header separator
-	sb.WriteString("+" + strings.Repeat("-", hostWidth+2) + "+" + strings.Repeat("-", statusWidth+2) + "+" + strings.Repeat("-", detailsWidth+2) + "+\n")
-
+	// Add rows
 	for _, host := range results.Hosts {
 		status := ""
 		details := ""
@@ -200,46 +220,10 @@ func FormatMultiHostHuman(results *core.MultiHostResults) string {
 			}
 		}
 
-		// Truncate hostname if too long
-		hostname := host.Target
-		if len(hostname) > hostWidth {
-			hostname = hostname[:hostWidth-3] + "..."
-		}
-
-		// Handle multi-line details (bullet lists)
-		detailLines := strings.Split(details, "\n")
-		var wrappedDetails []string
-
-		// Wrap each line individually
-		for _, line := range detailLines {
-			wrapped := wrapText(line, detailsWidth)
-			wrappedDetails = append(wrappedDetails, wrapped...)
-		}
-
-		// Print first line with host and status
-		if len(wrappedDetails) > 0 {
-			sb.WriteString(fmt.Sprintf("| %-*s | %-*s | %-*s |\n",
-				hostWidth, hostname,
-				statusWidth, status,
-				detailsWidth, wrappedDetails[0]))
-
-			// Print remaining wrapped lines
-			for i := 1; i < len(wrappedDetails); i++ {
-				sb.WriteString(fmt.Sprintf("| %-*s | %-*s | %-*s |\n",
-					hostWidth, "",
-					statusWidth, "",
-					detailsWidth, wrappedDetails[i]))
-			}
-		} else {
-			sb.WriteString(fmt.Sprintf("| %-*s | %-*s | %-*s |\n",
-				hostWidth, hostname,
-				statusWidth, status,
-				detailsWidth, ""))
-		}
+		t.AppendRow(table.Row{host.Target, status, details})
 	}
 
-	// Bottom border
-	sb.WriteString("+" + strings.Repeat("-", hostWidth+2) + "+" + strings.Repeat("-", statusWidth+2) + "+" + strings.Repeat("-", detailsWidth+2) + "+\n")
+	t.Render()
 
 	return sb.String()
 }
@@ -329,6 +313,15 @@ func stripAnsiCodes(text string) string {
 		i++
 	}
 	return result
+}
+
+// padRight pads text to the right while preserving ANSI codes
+func padRight(text string, width int) string {
+	visibleLen := len(stripAnsiCodes(text))
+	if visibleLen >= width {
+		return text
+	}
+	return text + strings.Repeat(" ", width-visibleLen)
 }
 
 func getStatusSymbol(status core.Status) string {

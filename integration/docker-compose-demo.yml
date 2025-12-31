@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  test-host-1:
+    image: linuxserver/openssh-server:latest
+    container_name: demo-test-host-1
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=UTC
+      - PASSWORD_ACCESS=true
+      - USER_PASSWORD=testpass
+      - USER_NAME=testuser
+    healthcheck:
+      test: ["CMD", "pgrep", "sshd"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  test-host-2:
+    image: linuxserver/openssh-server:latest
+    container_name: demo-test-host-2
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=UTC
+      - PASSWORD_ACCESS=true
+      - USER_PASSWORD=testpass
+      - USER_NAME=testuser
+    healthcheck:
+      test: ["CMD", "pgrep", "sshd"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  test-host-3:
+    image: linuxserver/openssh-server:latest
+    container_name: demo-test-host-3
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=UTC
+      - PASSWORD_ACCESS=true
+      - USER_PASSWORD=testpass
+      - USER_NAME=testuser
+    healthcheck:
+      test: ["CMD", "pgrep", "sshd"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  test-host-4:
+    image: linuxserver/openssh-server:latest
+    container_name: demo-test-host-4
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=UTC
+      - PASSWORD_ACCESS=true
+      - USER_PASSWORD=testpass
+      - USER_NAME=testuser
+    healthcheck:
+      test: ["CMD", "pgrep", "sshd"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  test-host-5:
+    image: linuxserver/openssh-server:latest
+    container_name: demo-test-host-5
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=UTC
+      - PASSWORD_ACCESS=true
+      - USER_PASSWORD=testpass
+      - USER_NAME=testuser
+    healthcheck:
+      test: ["CMD", "pgrep", "sshd"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+networks:
+  default:
+    name: platform-spec-demo-net

@@ -1,4 +1,4 @@
-.PHONY: build clean test install release-build deploy-kind-cluster destroy-kind-cluster security-scan security-scan-vuln security-scan-static test-docker test-docker-local test-kubernetes test-integration test-inventory test-jump destroy-test-jump
+.PHONY: build clean test install release-build deploy-kind-cluster destroy-kind-cluster security-scan security-scan-vuln security-scan-static test-docker test-docker-local test-kubernetes test-integration test-inventory test-bad-inventory test-jump destroy-test-jump
 
 # Cluster name for kind
 KIND_CLUSTER_NAME ?= platform-spec-test
@@ -93,6 +93,22 @@ test-inventory: build
 	@echo "=== Running Inventory Integration Test ==="
 	@echo ""
 	@cd integration && ./test-inventory-realistic.sh
+
+# Bad inventory test - demonstrates multi-host table with mixed results
+test-bad-inventory: build
+	@echo "=== Running Bad Inventory Test (Mixed Pass/Fail Demo) ==="
+	@echo ""
+	@echo "This test demonstrates:"
+	@echo "  - 2 hosts passing all tests"
+	@echo "  - 3 hosts with failing tests (showing bullet points)"
+	@echo "  - 5 hosts with connection failures"
+	@echo "  - Total: 10 hosts showing multi-host table formatting"
+	@echo ""
+	@echo "Building Linux binary for Docker container..."
+	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/platform-spec-linux ./cmd/platform-spec
+	@echo ""
+	@chmod +x integration/test-bad-inventory.sh
+	@cd integration && ./test-bad-inventory.sh
 
 # Run all integration tests (local)
 test-integration: test-docker-local test-kubernetes test-inventory
