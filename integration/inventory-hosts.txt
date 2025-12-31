@@ -1,0 +1,6 @@
+# Test inventory with Docker container names
+# All accessible on port 2222 via custom Docker network
+# Using testuser@host format for authentication
+testuser@platform-spec-test-1
+testuser@platform-spec-test-2
+testuser@platform-spec-test-3

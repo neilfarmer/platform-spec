@@ -1,0 +1,21 @@
+version: "1.0"
+metadata:
+  name: "Integration Test Spec"
+  description: "Basic tests for SSH container validation"
+
+tests:
+  command_content:
+    - name: "Container is accessible"
+      command: "echo 'SSH connection successful'"
+      contains:
+        - "SSH connection successful"
+
+    - name: "whoami command works"
+      command: "whoami"
+      contains:
+        - "testuser"
+
+    - name: "Basic file operations work"
+      command: "pwd"
+      contains:
+        - "/"

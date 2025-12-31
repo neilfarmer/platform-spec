@@ -14,7 +14,9 @@ When working in this codebase, follow these rules:
 
 2. **Test Everything**: When code is added, changed, or removed, corresponding tests must be added, changed, or removed. No code changes without test changes.
 
-3. **Light Documentation**: Keep documentation light and straightforward. Focus on clarity and brevity over comprehensiveness.
+3. **Always Run Tests and Security Scans**: Before committing any code changes, ALWAYS run `make test` and `make security-scan`. All tests must pass and all security issues must be resolved before committing.
+
+4. **Light Documentation**: Keep documentation light and straightforward. Focus on clarity and brevity over comprehensiveness.
 
 ## Essential Commands
 
@@ -156,7 +158,7 @@ cmd/platform-spec/     # CLI layer (Cobra commands)
 pkg/core/             # Core framework
 ├── executor.go       # Executor, Provider interface, Plugin interface
 ├── spec.go           # YAML parsing and test type definitions
-├── types.go          # Status, Result, TestResults structs
+├── types.go          # Status, Result, TestResults, HostResults, MultiHostResults structs
 ├── mock_provider.go  # Mock provider for testing
 ├── system/           # System plugin (OS-level tests)
 │   ├── plugin.go     # SystemPlugin implementation
@@ -187,6 +189,10 @@ pkg/providers/        # Infrastructure providers
 │   └── provider.go   # Remote execution via SSH
 └── kubernetes/
     └── provider.go   # Kubectl execution
+
+pkg/inventory/        # Inventory file parsing
+├── inventory.go      # Parse hosts from inventory files
+└── inventory_test.go # Inventory parsing tests
 
 pkg/output/           # Output formatters
 └── human.go          # Human-readable output (JSON/JUnit planned)
@@ -272,6 +278,51 @@ The KubernetesPlugin uses kubectl commands via the provider:
 - ConfigMap info: `kubectl get configmap <name> -n <namespace> -o json`
 
 All kubectl commands return JSON output which is parsed using helper functions (`getNestedString`, `getNestedMap`, etc.).
+
+### Inventory File Support
+
+**Format:**
+- Newline-delimited text file
+- Lines starting with `#` are comments (ignored)
+- Empty lines are ignored
+- Each line contains a hostname or IP address
+- All hosts use the same user (from CLI flags or defaults to `root`)
+
+**Usage:**
+```bash
+# Test multiple hosts from inventory file
+platform-spec test remote --inventory hosts.txt spec.yaml
+
+# With SSH options
+platform-spec test remote --inventory hosts.txt -i ~/.ssh/key spec.yaml
+```
+
+**Example inventory file:**
+```
+# Web servers
+web-server-01.example.com
+web-server-02.example.com
+
+# Database servers
+db-server-01.example.com
+
+# IP addresses
+192.168.1.10
+192.168.1.11
+```
+
+**Architecture:**
+- `pkg/inventory/inventory.go` parses inventory files
+- `cmd/platform-spec/test.go` orchestrates multi-host execution
+- `testSingleHost()` function tests individual hosts
+- `pkg/core/types.go` defines `HostResults` and `MultiHostResults` structs
+- `pkg/output/human.go` formats multi-host output with per-host results and summary
+
+**Execution Model:**
+- Sequential execution (one host at a time)
+- Connection errors are tracked separately from test failures
+- All hosts are tested even if some fail
+- Multi-host output shows per-host PASSED/FAILED status and overall summary
 
 ## Development Workflow
 

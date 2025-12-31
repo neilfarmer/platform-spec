@@ -73,6 +73,264 @@ func FormatHuman(results *core.TestResults) string {
 	return sb.String()
 }
 
+// FormatMultiHostHuman formats multi-host test results in human-readable format
+func FormatMultiHostHuman(results *core.MultiHostResults) string {
+	var sb strings.Builder
+
+	// Print results for each host
+	for i, host := range results.Hosts {
+		if i > 0 {
+			sb.WriteString("\n")
+		}
+
+		sb.WriteString(strings.Repeat("=", 40) + "\n")
+		sb.WriteString(fmt.Sprintf("Testing: %s\n", host.Target))
+		sb.WriteString(strings.Repeat("=", 40) + "\n\n")
+
+		if !host.Connected {
+			// Connection error
+			sb.WriteString(applyColor(colorRed, fmt.Sprintf("Connection failed: %v\n", host.ConnectionError)))
+			sb.WriteString(applyColor(colorBold+colorRed, "❌ FAILED"))
+			sb.WriteString("\n")
+		} else {
+			// Show results for each spec
+			for _, specResult := range host.SpecResults {
+				if specResult.SpecName != "" {
+					sb.WriteString(fmt.Sprintf("Spec: %s\n\n", specResult.SpecName))
+				}
+
+				// Print individual test results
+				for _, result := range specResult.Results {
+					symbol := getStatusSymbol(result.Status)
+					color := getStatusColor(result.Status)
+					sb.WriteString(fmt.Sprintf("%s (%.2fs)\n",
+						applyColor(color, symbol+" "+result.Name), result.Duration.Seconds()))
+
+					if result.Message != "" && result.Status != core.StatusPass {
+						sb.WriteString(fmt.Sprintf("  %s\n", applyColor(color, result.Message)))
+					}
+				}
+
+				sb.WriteString("\n")
+
+				// Summary for this spec
+				_, passed, failed, skipped, errors := specResult.Summary()
+				sb.WriteString(fmt.Sprintf("Tests: %d passed, %d failed, %d skipped, %d errors\n",
+					passed, failed, skipped, errors))
+				sb.WriteString(fmt.Sprintf("Duration: %.2fs\n", specResult.Duration.Seconds()))
+				sb.WriteString("\n")
+			}
+
+			// Overall status for this host
+			if host.Success() {
+				sb.WriteString(applyColor(colorBold+colorGreen, "✅ PASSED"))
+			} else {
+				sb.WriteString(applyColor(colorBold+colorRed, "❌ FAILED"))
+			}
+			sb.WriteString("\n")
+		}
+	}
+
+	// Summary section
+	sb.WriteString("\n")
+	sb.WriteString(strings.Repeat("=", 80) + "\n")
+	sb.WriteString("Results Summary\n")
+	sb.WriteString(strings.Repeat("=", 80) + "\n\n")
+
+	totalHosts, passedHosts, failedHosts, connectionErrors := results.Summary()
+	sb.WriteString(fmt.Sprintf("Total hosts: %d\n", totalHosts))
+	sb.WriteString(fmt.Sprintf("Passed: %d %s\n", passedHosts, applyColor(colorGreen, "✅")))
+	sb.WriteString(fmt.Sprintf("Failed: %d %s\n", failedHosts, applyColor(colorRed, "❌")))
+	if connectionErrors > 0 {
+		sb.WriteString(fmt.Sprintf("Connection errors: %d\n", connectionErrors))
+	}
+
+	// Results table with borders and word wrapping
+	sb.WriteString("\n")
+
+	const (
+		hostWidth    = 35
+		statusWidth  = 12
+		detailsWidth = 50
+	)
+
+	// Top border
+	sb.WriteString("+" + strings.Repeat("-", hostWidth+2) + "+" + strings.Repeat("-", statusWidth+2) + "+" + strings.Repeat("-", detailsWidth+2) + "+\n")
+
+	// Header
+	sb.WriteString(fmt.Sprintf("| %-*s | %-*s | %-*s |\n", hostWidth, "Host", statusWidth, "Status", detailsWidth, "Details"))
+
+	// Header separator
+	sb.WriteString("+" + strings.Repeat("-", hostWidth+2) + "+" + strings.Repeat("-", statusWidth+2) + "+" + strings.Repeat("-", detailsWidth+2) + "+\n")
+
+	for _, host := range results.Hosts {
+		status := ""
+		details := ""
+
+		if !host.Connected {
+			// Connection error - simplified message
+			status = applyColor(colorBold+colorRed, "FAILED")
+			details = applyColor(colorRed, "• Unable to connect via SSH")
+		} else if host.Success() {
+			// All tests passed
+			status = applyColor(colorBold+colorGreen, "PASSED")
+			details = applyColor(colorGreen, "All tests passed")
+		} else {
+			// Some tests failed - show bullet list of failures
+			status = applyColor(colorBold+colorRed, "FAILED")
+
+			// Collect failed and error test names
+			var failedTests []string
+
+			for _, specResult := range host.SpecResults {
+				for _, result := range specResult.Results {
+					if result.Status == core.StatusFail || result.Status == core.StatusError {
+						failedTests = append(failedTests, result.Name)
+					}
+				}
+			}
+
+			// Create bullet list
+			if len(failedTests) > 0 {
+				bullets := make([]string, len(failedTests))
+				for i, testName := range failedTests {
+					bullets[i] = "• " + testName
+				}
+				details = applyColor(colorRed, strings.Join(bullets, "\n"))
+			}
+		}
+
+		// Truncate hostname if too long
+		hostname := host.Target
+		if len(hostname) > hostWidth {
+			hostname = hostname[:hostWidth-3] + "..."
+		}
+
+		// Handle multi-line details (bullet lists)
+		detailLines := strings.Split(details, "\n")
+		var wrappedDetails []string
+
+		// Wrap each line individually
+		for _, line := range detailLines {
+			wrapped := wrapText(line, detailsWidth)
+			wrappedDetails = append(wrappedDetails, wrapped...)
+		}
+
+		// Print first line with host and status
+		if len(wrappedDetails) > 0 {
+			sb.WriteString(fmt.Sprintf("| %-*s | %-*s | %-*s |\n",
+				hostWidth, hostname,
+				statusWidth, status,
+				detailsWidth, wrappedDetails[0]))
+
+			// Print remaining wrapped lines
+			for i := 1; i < len(wrappedDetails); i++ {
+				sb.WriteString(fmt.Sprintf("| %-*s | %-*s | %-*s |\n",
+					hostWidth, "",
+					statusWidth, "",
+					detailsWidth, wrappedDetails[i]))
+			}
+		} else {
+			sb.WriteString(fmt.Sprintf("| %-*s | %-*s | %-*s |\n",
+				hostWidth, hostname,
+				statusWidth, status,
+				detailsWidth, ""))
+		}
+	}
+
+	// Bottom border
+	sb.WriteString("+" + strings.Repeat("-", hostWidth+2) + "+" + strings.Repeat("-", statusWidth+2) + "+" + strings.Repeat("-", detailsWidth+2) + "+\n")
+
+	return sb.String()
+}
+
+// wrapText wraps text to fit within a specified width, preserving ANSI color codes
+func wrapText(text string, width int) []string {
+	if width <= 0 {
+		return []string{text}
+	}
+
+	// Strip ANSI codes to get visible text
+	visibleText := stripAnsiCodes(text)
+
+	// If text fits, return as-is
+	if len(visibleText) <= width {
+		return []string{text}
+	}
+
+	// Extract color codes from the beginning
+	colorPrefix := ""
+	colorSuffix := ""
+	if strings.Contains(text, "\033[") {
+		// Find the first non-ANSI character position
+		for i := 0; i < len(text); i++ {
+			if text[i] == '\033' {
+				// Find end of ANSI sequence
+				end := strings.Index(text[i:], "m")
+				if end != -1 {
+					colorPrefix = text[:i+end+1]
+					break
+				}
+			}
+		}
+		// Check for reset code at the end
+		if strings.HasSuffix(text, colorReset) {
+			colorSuffix = colorReset
+		}
+	}
+
+	// Wrap the visible text
+	var lines []string
+	words := strings.Fields(visibleText)
+	currentLine := ""
+
+	for _, word := range words {
+		testLine := currentLine
+		if testLine != "" {
+			testLine += " "
+		}
+		testLine += word
+
+		if len(testLine) <= width {
+			currentLine = testLine
+		} else {
+			if currentLine != "" {
+				lines = append(lines, colorPrefix+currentLine+colorSuffix)
+			}
+			currentLine = word
+		}
+	}
+
+	if currentLine != "" {
+		lines = append(lines, colorPrefix+currentLine+colorSuffix)
+	}
+
+	if len(lines) == 0 {
+		return []string{text}
+	}
+
+	return lines
+}
+
+// stripAnsiCodes removes ANSI color codes from a string
+func stripAnsiCodes(text string) string {
+	result := ""
+	i := 0
+	for i < len(text) {
+		if text[i] == '\033' && i+1 < len(text) && text[i+1] == '[' {
+			// Find the end of the ANSI sequence
+			end := strings.Index(text[i:], "m")
+			if end != -1 {
+				i += end + 1
+				continue
+			}
+		}
+		result += string(text[i])
+		i++
+	}
+	return result
+}
+
 func getStatusSymbol(status core.Status) string {
 	switch status {
 	case core.StatusPass:
