@@ -25,6 +25,9 @@ var (
 	strictHostKeyChecking bool
 	knownHostsFile        string
 	insecureIgnoreHostKey bool
+	jumpHost              string
+	jumpPort              int
+	jumpUser              string
 
 	// Kubernetes flags
 	kubeconfig    string
@@ -93,6 +96,9 @@ func init() {
 	remoteCmd.Flags().BoolVar(&strictHostKeyChecking, "strict-host-key-checking", true, "Enable strict host key checking (default: true)")
 	remoteCmd.Flags().StringVar(&knownHostsFile, "known-hosts-file", "", "Path to known_hosts file (default: ~/.ssh/known_hosts)")
 	remoteCmd.Flags().BoolVar(&insecureIgnoreHostKey, "insecure-ignore-host-key", false, "Disable host key verification (INSECURE, not recommended)")
+	remoteCmd.Flags().StringVarP(&jumpHost, "jump-host", "J", "", "Jump host (bastion) for SSH connection (format: [user@]host)")
+	remoteCmd.Flags().IntVar(&jumpPort, "jump-port", 22, "Jump host SSH port (default: 22)")
+	remoteCmd.Flags().StringVar(&jumpUser, "jump-user", "", "Jump host SSH user (overrides user from --jump-host)")
 
 	// Output flags (shared across all test commands)
 	remoteCmd.Flags().StringVarP(&outputFormat, "output", "o", "human", "Output format (human, json, junit)")
@@ -127,6 +133,10 @@ func runRemoteTest(cmd *cobra.Command, args []string) {
 		if identityFile != "" {
 			fmt.Printf("Identity: %s\n", identityFile)
 		}
+		if jumpHost != "" {
+			fmt.Printf("Jump Host: %s\n", jumpHost)
+			fmt.Printf("Jump Port: %d\n", jumpPort)
+		}
 		fmt.Printf("Spec files: %v\n", specFiles)
 		fmt.Printf("\n")
 	}
@@ -136,6 +146,20 @@ func runRemoteTest(cmd *cobra.Command, args []string) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
+	}
+
+	// Parse jump host if provided
+	var parsedJumpHost, parsedJumpUser string
+	if jumpHost != "" {
+		parsedJumpUser, parsedJumpHost, err = remote.ParseTarget(jumpHost, "")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error parsing jump host: %v\n", err)
+			os.Exit(1)
+		}
+		// Allow explicit jump user override
+		if jumpUser != "" {
+			parsedJumpUser = jumpUser
+		}
 	}
 
 	// Create remote provider
@@ -148,6 +172,9 @@ func runRemoteTest(cmd *cobra.Command, args []string) {
 		StrictHostKeyChecking: strictHostKeyChecking,
 		KnownHostsFile:        knownHostsFile,
 		InsecureIgnoreHostKey: insecureIgnoreHostKey,
+		JumpHost:              parsedJumpHost,
+		JumpPort:              jumpPort,
+		JumpUser:              parsedJumpUser,
 	})
 
 	// Connect to target

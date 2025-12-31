@@ -1,0 +1,34 @@
+version: "1.0"
+
+metadata:
+  name: "Jump Host Test Spec"
+  description: "Test specification for validating jump host connectivity"
+  tags: ["integration", "jump-host"]
+
+config:
+  fail_fast: false
+  timeout: 60
+
+tests:
+  packages:
+    - name: "curl is installed"
+      packages:
+        - curl
+      state: present
+
+  files:
+    - name: "testuser home directory exists"
+      path: /home/testuser
+      type: directory
+      state: present
+
+    - name: "SSH authorized_keys file exists"
+      path: /home/testuser/.ssh/authorized_keys
+      type: file
+      state: present
+
+  command_content:
+    - name: "Hostname is target-host"
+      command: hostname
+      contains:
+        - "target-host"

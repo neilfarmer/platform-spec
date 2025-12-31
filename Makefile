@@ -1,4 +1,4 @@
-.PHONY: build clean test install release-build deploy-kind-cluster destroy-kind-cluster security-scan security-scan-vuln security-scan-static test-docker test-docker-local test-kubernetes test-integration
+.PHONY: build clean test install release-build deploy-kind-cluster destroy-kind-cluster security-scan security-scan-vuln security-scan-static test-docker test-docker-local test-kubernetes test-integration test-jump destroy-test-jump
 
 # Cluster name for kind
 KIND_CLUSTER_NAME ?= platform-spec-test
@@ -111,3 +111,51 @@ security-scan-static:
 
 # Security scanning - Run both
 security-scan: security-scan-vuln security-scan-static
+
+# Jump host testing - Deploy test environment
+test-jump: build
+	@echo "=== Setting up Jump Host Test Environment ==="
+	@echo ""
+	@echo "Creating SSH keypair..."
+	@mkdir -p integration/jump-host/ssh-keys
+	@if [ ! -f integration/jump-host/ssh-keys/id_rsa ]; then \
+		ssh-keygen -t rsa -b 2048 -f integration/jump-host/ssh-keys/id_rsa -N "" -C "platform-spec-test"; \
+		chmod 600 integration/jump-host/ssh-keys/id_rsa; \
+		chmod 644 integration/jump-host/ssh-keys/id_rsa.pub; \
+	else \
+		echo "SSH keypair already exists"; \
+	fi
+	@echo ""
+	@echo "Building and starting containers..."
+	@cd integration/jump-host && docker-compose up -d --build
+	@echo ""
+	@echo "Waiting for containers to be ready..."
+	@sleep 5
+	@echo ""
+	@echo "Adding jump host to known_hosts..."
+	@ssh-keyscan -p 2222 -H localhost >> ~/.ssh/known_hosts 2>/dev/null || true
+	@echo ""
+	@echo "✅ Jump host test environment is ready!"
+	@echo ""
+	@echo "Test the jump host connection with:"
+	@echo "  ./dist/platform-spec test remote -J testuser@localhost --jump-port 2222 testuser@target-host integration/jump-host/spec.yaml -i integration/jump-host/ssh-keys/id_rsa --insecure-ignore-host-key --verbose"
+	@echo ""
+	@echo "Or test direct connection to jump host:"
+	@echo "  ssh -i integration/jump-host/ssh-keys/id_rsa -p 2222 testuser@localhost"
+	@echo ""
+	@echo "When done, run: make destroy-test-jump"
+
+# Jump host testing - Destroy test environment
+destroy-test-jump:
+	@echo "=== Tearing down Jump Host Test Environment ==="
+	@echo ""
+	@echo "Stopping and removing containers..."
+	@cd integration/jump-host && docker-compose down -v 2>/dev/null || true
+	@echo ""
+	@echo "Removing SSH keypair..."
+	@rm -rf integration/jump-host/ssh-keys
+	@echo ""
+	@echo "Removing known_hosts entries for localhost:2222..."
+	@ssh-keygen -R "[localhost]:2222" 2>/dev/null || true
+	@echo ""
+	@echo "✅ Jump host test environment destroyed"

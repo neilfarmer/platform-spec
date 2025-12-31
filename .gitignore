@@ -36,6 +36,9 @@ go.work.sum
 dist/
 bin/
 
+# Test SSH keys (jump host testing)
+integration/jump-host/ssh-keys/
+
 # Test files (except examples and config)
 *.yaml
 *.yml

@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  jump-host:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: platform-spec-jump
+    hostname: jump-host
+    ports:
+      - "2222:22"
+    networks:
+      - jump-net
+    volumes:
+      - ./ssh-keys/id_rsa.pub:/home/testuser/.ssh/authorized_keys:ro
+    healthcheck:
+      test: ["CMD", "ssh", "-o", "StrictHostKeyChecking=no", "-i", "/dev/null", "localhost", "exit", "0"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  target-host:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: platform-spec-target
+    hostname: target-host
+    networks:
+      - jump-net
+    volumes:
+      - ./ssh-keys/id_rsa.pub:/home/testuser/.ssh/authorized_keys:ro
+    healthcheck:
+      test: ["CMD", "ssh", "-o", "StrictHostKeyChecking=no", "-i", "/dev/null", "localhost", "exit", "0"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+networks:
+  jump-net:
+    name: platform-spec-jump-net
+    driver: bridge

@@ -16,8 +16,9 @@ import (
 
 // Provider implements remote system testing via SSH
 type Provider struct {
-	client *ssh.Client
-	config *Config
+	client     *ssh.Client
+	jumpClient *ssh.Client // Jump host client (if using jump host)
+	config     *Config
 }
 
 // Config holds remote connection configuration
@@ -30,6 +31,9 @@ type Config struct {
 	StrictHostKeyChecking  bool   // Enable strict host key checking (default: true)
 	KnownHostsFile         string // Path to known_hosts file (default: ~/.ssh/known_hosts)
 	InsecureIgnoreHostKey  bool   // Disable host key verification (INSECURE, not recommended)
+	JumpHost               string // Jump host (bastion) hostname or IP
+	JumpPort               int    // Jump host SSH port (default: 22)
+	JumpUser               string // Jump host SSH user
 }
 
 // ParseTarget parses a target string like "user@host" or "host"
@@ -55,6 +59,7 @@ func NewProvider(config *Config) *Provider {
 }
 
 // Connect establishes the SSH connection
+// If a jump host is configured, it will connect through the jump host
 func (p *Provider) Connect(ctx context.Context) error {
 	authMethods := []ssh.AuthMethod{}
 
@@ -88,6 +93,17 @@ func (p *Provider) Connect(ctx context.Context) error {
 		return fmt.Errorf("failed to configure host key verification: %w", err)
 	}
 
+	// If jump host is configured, connect through it
+	if p.config.JumpHost != "" {
+		client, err := p.connectViaJumpHost(authMethods, hostKeyCallback)
+		if err != nil {
+			return err
+		}
+		p.client = client
+		return nil
+	}
+
+	// Direct connection (no jump host)
 	sshConfig := &ssh.ClientConfig{
 		User:            p.config.User,
 		Auth:            authMethods,
@@ -105,12 +121,77 @@ func (p *Provider) Connect(ctx context.Context) error {
 	return nil
 }
 
-// Close closes the SSH connection
-func (p *Provider) Close() error {
-	if p.client != nil {
-		return p.client.Close()
+// connectViaJumpHost establishes an SSH connection through a jump host
+func (p *Provider) connectViaJumpHost(authMethods []ssh.AuthMethod, hostKeyCallback ssh.HostKeyCallback) (*ssh.Client, error) {
+	// First, connect to the jump host
+	jumpConfig := &ssh.ClientConfig{
+		User:            p.config.JumpUser,
+		Auth:            authMethods,
+		HostKeyCallback: hostKeyCallback,
+		Timeout:         p.config.Timeout,
 	}
-	return nil
+
+	jumpAddr := fmt.Sprintf("%s:%d", p.config.JumpHost, p.config.JumpPort)
+	jumpClient, err := ssh.Dial("tcp", jumpAddr, jumpConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to jump host %s: %w", jumpAddr, err)
+	}
+
+	// Store the jump client so it can be closed later
+	p.jumpClient = jumpClient
+
+	// Use the jump host connection to dial the target host
+	targetAddr := fmt.Sprintf("%s:%d", p.config.Host, p.config.Port)
+	targetConn, err := jumpClient.Dial("tcp", targetAddr)
+	if err != nil {
+		jumpClient.Close()
+		return nil, fmt.Errorf("failed to dial target %s through jump host: %w", targetAddr, err)
+	}
+
+	// Create SSH connection to target through the proxied connection
+	targetConfig := &ssh.ClientConfig{
+		User:            p.config.User,
+		Auth:            authMethods,
+		HostKeyCallback: hostKeyCallback,
+		Timeout:         p.config.Timeout,
+	}
+
+	ncc, chans, reqs, err := ssh.NewClientConn(targetConn, targetAddr, targetConfig)
+	if err != nil {
+		targetConn.Close()
+		jumpClient.Close()
+		return nil, fmt.Errorf("failed to establish SSH connection to target %s: %w", targetAddr, err)
+	}
+
+	// Create the target client
+	targetClient := ssh.NewClient(ncc, chans, reqs)
+
+	return targetClient, nil
+}
+
+// Close closes the SSH connection(s)
+// If using a jump host, both the target and jump host connections are closed
+func (p *Provider) Close() error {
+	var err error
+
+	// Close target client first
+	if p.client != nil {
+		if closeErr := p.client.Close(); closeErr != nil {
+			err = closeErr
+		}
+	}
+
+	// Close jump host client if it exists
+	if p.jumpClient != nil {
+		if closeErr := p.jumpClient.Close(); closeErr != nil {
+			// Return the first error, but try to close both
+			if err == nil {
+				err = closeErr
+			}
+		}
+	}
+
+	return err
 }
 
 // ExecuteCommand executes a command via SSH and returns stdout, stderr, and exit code

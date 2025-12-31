@@ -83,3 +83,94 @@ func TestNewProvider(t *testing.T) {
 		t.Error("NewProvider() did not set config correctly")
 	}
 }
+
+func TestNewProviderWithJumpHost(t *testing.T) {
+	tests := []struct {
+		name           string
+		config         *Config
+		wantJumpHost   string
+		wantJumpPort   int
+		wantJumpUser   string
+		wantTargetHost string
+		wantTargetPort int
+		wantTargetUser string
+	}{
+		{
+			name: "with jump host configuration",
+			config: &Config{
+				Host:     "target-host",
+				Port:     22,
+				User:     "targetuser",
+				JumpHost: "jump-host",
+				JumpPort: 22,
+				JumpUser: "jumpuser",
+			},
+			wantJumpHost:   "jump-host",
+			wantJumpPort:   22,
+			wantJumpUser:   "jumpuser",
+			wantTargetHost: "target-host",
+			wantTargetPort: 22,
+			wantTargetUser: "targetuser",
+		},
+		{
+			name: "with jump host and custom port",
+			config: &Config{
+				Host:     "target-host",
+				Port:     2222,
+				User:     "targetuser",
+				JumpHost: "jump-host",
+				JumpPort: 2223,
+				JumpUser: "jumpuser",
+			},
+			wantJumpHost:   "jump-host",
+			wantJumpPort:   2223,
+			wantJumpUser:   "jumpuser",
+			wantTargetHost: "target-host",
+			wantTargetPort: 2222,
+			wantTargetUser: "targetuser",
+		},
+		{
+			name: "without jump host",
+			config: &Config{
+				Host: "direct-host",
+				Port: 22,
+				User: "directuser",
+			},
+			wantJumpHost:   "",
+			wantJumpPort:   0,
+			wantJumpUser:   "",
+			wantTargetHost: "direct-host",
+			wantTargetPort: 22,
+			wantTargetUser: "directuser",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			provider := NewProvider(tt.config)
+
+			if provider == nil {
+				t.Fatal("NewProvider() returned nil")
+			}
+
+			if provider.config.JumpHost != tt.wantJumpHost {
+				t.Errorf("config.JumpHost = %v, want %v", provider.config.JumpHost, tt.wantJumpHost)
+			}
+			if provider.config.JumpPort != tt.wantJumpPort {
+				t.Errorf("config.JumpPort = %v, want %v", provider.config.JumpPort, tt.wantJumpPort)
+			}
+			if provider.config.JumpUser != tt.wantJumpUser {
+				t.Errorf("config.JumpUser = %v, want %v", provider.config.JumpUser, tt.wantJumpUser)
+			}
+			if provider.config.Host != tt.wantTargetHost {
+				t.Errorf("config.Host = %v, want %v", provider.config.Host, tt.wantTargetHost)
+			}
+			if provider.config.Port != tt.wantTargetPort {
+				t.Errorf("config.Port = %v, want %v", provider.config.Port, tt.wantTargetPort)
+			}
+			if provider.config.User != tt.wantTargetUser {
+				t.Errorf("config.User = %v, want %v", provider.config.User, tt.wantTargetUser)
+			}
+		})
+	}
+}
