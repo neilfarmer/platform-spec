@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.8.0](https://github.com/neilfarmer/platform-spec/compare/v0.7.0...v0.8.0) (2025-12-31)
+
+
+### Features
+
+* Add enhanced multi-host table output with go-pretty library ([7e894d9](https://github.com/neilfarmer/platform-spec/commit/7e894d9435c29ec4b44091ef716448d3ee1129b1))
+* Add enhanced multi-host table output with go-pretty library ([87b2c52](https://github.com/neilfarmer/platform-spec/commit/87b2c5210bccd328ebe75bf26041424a46e94094))
+* Add updates and fixes ([54b99ad](https://github.com/neilfarmer/platform-spec/commit/54b99ad5f16ef9fe78a01762d910167cf64ae268))
+* Add YAML import/include functionality for composable specs ([1ba3e58](https://github.com/neilfarmer/platform-spec/commit/1ba3e584d84e3a002fa07cbbd508902abfeb13f3))
+* Improve YAML validation error messages with user-friendly output ([f78a7f4](https://github.com/neilfarmer/platform-spec/commit/f78a7f4eb84691ec5987cfdc5ec39a209d8d8217))
+
+
+### Bug Fixes
+
+* Consolidate duplicate SSH host key verification warnings ([c9f18bb](https://github.com/neilfarmer/platform-spec/commit/c9f18bb027ec70ecf43a14e68637fda7ff119654))
+
 ## [0.7.0](https://github.com/neilfarmer/platform-spec/compare/v0.6.0...v0.7.0) (2025-12-31)
 
 
