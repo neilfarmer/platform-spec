@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	ssh_config "github.com/kevinburke/ssh_config"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
 	"golang.org/x/crypto/ssh/knownhosts"
@@ -103,7 +104,9 @@ func (p *Provider) Connect(ctx context.Context) error {
 		Timeout:         p.config.Timeout,
 	}
 
-	addr := fmt.Sprintf("%s:%d", p.config.Host, p.config.Port)
+	// Resolve hostname via SSH config before DNS resolution
+	resolvedHost := resolveHostFromSSHConfig(p.config.Host)
+	addr := fmt.Sprintf("%s:%d", resolvedHost, p.config.Port)
 	client, err := ssh.Dial("tcp", addr, sshConfig)
 	if err != nil {
 		return fmt.Errorf("failed to connect to %s: %w", addr, err)
@@ -159,7 +162,9 @@ func (p *Provider) connectViaJumpHost(jumpAuthMethods, targetAuthMethods []ssh.A
 		Timeout:         p.config.Timeout,
 	}
 
-	jumpAddr := fmt.Sprintf("%s:%d", p.config.JumpHost, p.config.JumpPort)
+	// Resolve jump host hostname via SSH config before DNS resolution
+	resolvedJumpHost := resolveHostFromSSHConfig(p.config.JumpHost)
+	jumpAddr := fmt.Sprintf("%s:%d", resolvedJumpHost, p.config.JumpPort)
 	jumpClient, err := ssh.Dial("tcp", jumpAddr, jumpConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to jump host %s: %w", jumpAddr, err)
@@ -168,8 +173,9 @@ func (p *Provider) connectViaJumpHost(jumpAuthMethods, targetAuthMethods []ssh.A
 	// Store the jump client so it can be closed later
 	p.jumpClient = jumpClient
 
-	// Use the jump host connection to dial the target host
-	targetAddr := fmt.Sprintf("%s:%d", p.config.Host, p.config.Port)
+	// Resolve target host hostname via SSH config before DNS resolution
+	resolvedTargetHost := resolveHostFromSSHConfig(p.config.Host)
+	targetAddr := fmt.Sprintf("%s:%d", resolvedTargetHost, p.config.Port)
 	targetConn, err := jumpClient.Dial("tcp", targetAddr)
 	if err != nil {
 		// #nosec G104 -- Already in error path, ignoring close error is acceptable
@@ -312,4 +318,53 @@ func getSSHAgent() (agent.Agent, error) {
 	}
 
 	return agent.NewClient(conn), nil
+}
+
+// resolveHostFromSSHConfig resolves a hostname using SSH config files
+// It checks ~/.ssh/config and /etc/ssh/ssh_config for Host patterns
+// and returns the HostName directive value if found, or the original hostname if not
+func resolveHostFromSSHConfig(host string) string {
+	// Try to read SSH config files in order of precedence:
+	// 1. User config: ~/.ssh/config
+	// 2. System config: /etc/ssh/ssh_config
+
+	// Try user config first
+	home, err := os.UserHomeDir()
+	if err == nil {
+		userConfigPath := filepath.Join(home, ".ssh", "config")
+		if hostname := getHostnameFromConfig(userConfigPath, host); hostname != "" {
+			return hostname
+		}
+	}
+
+	// Try system config
+	systemConfigPath := "/etc/ssh/ssh_config"
+	if hostname := getHostnameFromConfig(systemConfigPath, host); hostname != "" {
+		return hostname
+	}
+
+	// No HostName found in config, return original host
+	return host
+}
+
+// getHostnameFromConfig reads an SSH config file and returns the HostName for the given host
+func getHostnameFromConfig(configPath string, host string) string {
+	// #nosec G304 -- Reading SSH config files is intentional and required functionality
+	f, err := os.Open(configPath)
+	if err != nil {
+		// Config file doesn't exist or can't be read, which is fine
+		return ""
+	}
+	defer f.Close()
+
+	cfg, err := ssh_config.Decode(f)
+	if err != nil {
+		// Can't parse config, return empty
+		return ""
+	}
+
+	// Get the HostName directive for this host
+	// ssh_config.Config.Get returns empty string if not found
+	hostname, _ := cfg.Get(host, "HostName")
+	return hostname
 }

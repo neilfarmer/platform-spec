@@ -2,6 +2,7 @@ package remote
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"testing"
 )
@@ -305,4 +306,155 @@ func findSubstring(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+func TestResolveHostFromSSHConfig(t *testing.T) {
+	// Create a temporary SSH config file for testing
+	tmpDir := t.TempDir()
+	configPath := tmpDir + "/config"
+
+	// Write a test SSH config
+	configContent := `# Test SSH config
+Host web-server
+    HostName 192.168.1.100
+    User admin
+
+Host db-server
+    HostName db.internal.example.com
+    Port 2222
+
+Host no-hostname
+    User root
+    Port 22
+
+Host wildcard-*
+    HostName 10.0.0.1
+`
+
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+		t.Fatalf("Failed to create test SSH config: %v", err)
+	}
+
+	// Set the SSH config file path for testing
+	// ssh_config library reads from ~/.ssh/config by default
+	// We'll need to temporarily override the home directory
+	originalHome := os.Getenv("HOME")
+	defer os.Setenv("HOME", originalHome)
+
+	// Create ~/.ssh directory in temp location
+	sshDir := tmpDir + "/.ssh"
+	if err := os.MkdirAll(sshDir, 0700); err != nil {
+		t.Fatalf("Failed to create .ssh directory: %v", err)
+	}
+
+	// Move config to ~/.ssh/config in temp location
+	newConfigPath := sshDir + "/config"
+	if err := os.Rename(configPath, newConfigPath); err != nil {
+		t.Fatalf("Failed to move config: %v", err)
+	}
+
+	// Set HOME to temp directory
+	os.Setenv("HOME", tmpDir)
+
+	tests := []struct {
+		name         string
+		host         string
+		wantHostname string
+	}{
+		{
+			name:         "resolve hostname from config",
+			host:         "web-server",
+			wantHostname: "192.168.1.100",
+		},
+		{
+			name:         "resolve FQDN from config",
+			host:         "db-server",
+			wantHostname: "db.internal.example.com",
+		},
+		{
+			name:         "host without HostName directive returns original",
+			host:         "no-hostname",
+			wantHostname: "no-hostname",
+		},
+		{
+			name:         "host not in config returns original",
+			host:         "unknown-host",
+			wantHostname: "unknown-host",
+		},
+		{
+			name:         "wildcard pattern match",
+			host:         "wildcard-prod",
+			wantHostname: "10.0.0.1",
+		},
+		{
+			name:         "IP address returns as-is",
+			host:         "192.168.1.50",
+			wantHostname: "192.168.1.50",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resolved := resolveHostFromSSHConfig(tt.host)
+			if resolved != tt.wantHostname {
+				t.Errorf("resolveHostFromSSHConfig(%q) = %q, want %q", tt.host, resolved, tt.wantHostname)
+			}
+		})
+	}
+}
+
+func TestGetHostnameFromConfig(t *testing.T) {
+	// Create a temporary SSH config file
+	tmpDir := t.TempDir()
+	configPath := tmpDir + "/config"
+
+	configContent := `Host testhost
+    HostName 192.168.1.1
+    User admin
+`
+
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+		t.Fatalf("Failed to create test config: %v", err)
+	}
+
+	tests := []struct {
+		name         string
+		configPath   string
+		host         string
+		wantHostname string
+	}{
+		{
+			name:         "valid config with matching host",
+			configPath:   configPath,
+			host:         "testhost",
+			wantHostname: "192.168.1.1",
+		},
+		{
+			name:         "valid config with non-matching host",
+			configPath:   configPath,
+			host:         "otherhost",
+			wantHostname: "",
+		},
+		{
+			name:         "non-existent config file",
+			configPath:   tmpDir + "/nonexistent",
+			host:         "testhost",
+			wantHostname: "",
+		},
+		{
+			name:         "invalid config file",
+			configPath:   tmpDir,
+			host:         "testhost",
+			wantHostname: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hostname := getHostnameFromConfig(tt.configPath, tt.host)
+			if hostname != tt.wantHostname {
+				t.Errorf("getHostnameFromConfig(%q, %q) = %q, want %q", tt.configPath, tt.host, hostname, tt.wantHostname)
+			}
+		})
+	}
 }
