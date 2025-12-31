@@ -120,6 +120,8 @@ func (p *Provider) buildAuthMethods(identityFile string, hostType string) ([]ssh
 
 	// Try SSH key file authentication if provided
 	if identityFile != "" {
+		// #nosec G304 -- Reading user-specified SSH key file is intentional and required functionality.
+		// The user controls the path via CLI flag, similar to ssh -i flag behavior.
 		key, err := os.ReadFile(identityFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read private key for %s: %w", hostType, err)
@@ -170,6 +172,7 @@ func (p *Provider) connectViaJumpHost(jumpAuthMethods, targetAuthMethods []ssh.A
 	targetAddr := fmt.Sprintf("%s:%d", p.config.Host, p.config.Port)
 	targetConn, err := jumpClient.Dial("tcp", targetAddr)
 	if err != nil {
+		// #nosec G104 -- Already in error path, ignoring close error is acceptable
 		jumpClient.Close()
 		return nil, fmt.Errorf("failed to dial target %s through jump host: %w", targetAddr, err)
 	}
@@ -184,7 +187,9 @@ func (p *Provider) connectViaJumpHost(jumpAuthMethods, targetAuthMethods []ssh.A
 
 	ncc, chans, reqs, err := ssh.NewClientConn(targetConn, targetAddr, targetConfig)
 	if err != nil {
+		// #nosec G104 -- Already in error path, cleanup errors can be safely ignored
 		targetConn.Close()
+		// #nosec G104 -- Already in error path, cleanup errors can be safely ignored
 		jumpClient.Close()
 		return nil, fmt.Errorf("failed to establish SSH connection to target %s: %w", targetAddr, err)
 	}
