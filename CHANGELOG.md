@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.7.0](https://github.com/neilfarmer/platform-spec/compare/v0.6.0...v0.7.0) (2025-12-31)
+
+
+### Features
+
+* Add colored PASSED/FAILED indicators to test output ([e617e45](https://github.com/neilfarmer/platform-spec/commit/e617e45d6a0fc0c6a6254c481e89946e4758e193))
+* Add colored PASSED/FAILED indicators to test output ([5734d74](https://github.com/neilfarmer/platform-spec/commit/5734d74f67373b39205f08e5a2444f95965de317))
+* Add inventory file support for multi-host testing ([b2b17c9](https://github.com/neilfarmer/platform-spec/commit/b2b17c99766c6254b6ef63ab56de43a9ebd24100))
+* Add inventory file support for multi-host testing ([40edfcb](https://github.com/neilfarmer/platform-spec/commit/40edfcb815cc876f232691db439c0a3ba089c162))
+
 ## [0.6.0](https://github.com/neilfarmer/platform-spec/compare/v0.5.0...v0.6.0) (2025-12-31)
 
 
