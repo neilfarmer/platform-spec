@@ -1,0 +1,15 @@
+# Simple inventory file example
+# Lines starting with # are comments
+
+# Web servers
+web-server-01.example.com
+web-server-02.example.com
+web-server-03.example.com
+
+# Database servers
+db-server-01.example.com
+db-server-02.example.com
+
+# IP addresses are also supported
+192.168.1.10
+192.168.1.11

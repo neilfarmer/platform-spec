@@ -1,4 +1,4 @@
-.PHONY: build clean test install release-build deploy-kind-cluster destroy-kind-cluster security-scan security-scan-vuln security-scan-static test-docker test-docker-local test-kubernetes test-integration test-jump destroy-test-jump
+.PHONY: build clean test install release-build deploy-kind-cluster destroy-kind-cluster security-scan security-scan-vuln security-scan-static test-docker test-docker-local test-kubernetes test-integration test-inventory test-jump destroy-test-jump
 
 # Cluster name for kind
 KIND_CLUSTER_NAME ?= platform-spec-test
@@ -88,8 +88,14 @@ test-kubernetes: deploy-kind-cluster build
 	@echo "Running Kubernetes integration tests..."
 	@./dist/platform-spec test kubernetes examples/kubernetes-basic.yaml $(VERBOSE_FLAG)
 
+# Inventory integration test
+test-inventory: build
+	@echo "=== Running Inventory Integration Test ==="
+	@echo ""
+	@cd integration && ./test-inventory-realistic.sh
+
 # Run all integration tests (local)
-test-integration: test-docker-local test-kubernetes
+test-integration: test-docker-local test-kubernetes test-inventory
 	@echo ""
 	@echo "✅ All integration tests completed successfully!"
 

@@ -84,6 +84,9 @@ platform-spec test local mytest.yaml
 
 # Test remote system via SSH
 platform-spec test remote ubuntu@myhost mytest.yaml
+
+# Test multiple hosts from inventory file
+platform-spec test remote --inventory hosts.txt mytest.yaml
 ```
 
 See [USAGE.md](USAGE.md) for complete documentation.
@@ -107,6 +110,10 @@ See [USAGE.md](USAGE.md) for complete documentation.
 - **Kubernetes Plugin**: 5 test types for K8s resources
   - Namespaces, pods, deployments, services, configmaps
 - **Kubernetes Provider**: kubectl-based command execution
+- **Inventory File Support**: Test multiple hosts from a file
+  - Newline-delimited format with comment support
+  - Sequential execution with per-host results
+  - Consolidated multi-host output
 
 ### Phase 3: Advanced Features
 

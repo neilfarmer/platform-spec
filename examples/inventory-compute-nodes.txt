@@ -1,0 +1,14 @@
+# OpenStack compute nodes inventory
+# Use this to test all hypervisors in your OpenStack cloud
+#
+# Generate this file using:
+# openstack hypervisor list -f value -c "Hypervisor Hostname" | grep compute > inventory-compute-nodes.txt
+
+compute-01.cloud.example.com
+compute-02.cloud.example.com
+compute-03.cloud.example.com
+compute-04.cloud.example.com
+compute-05.cloud.example.com
+compute-06.cloud.example.com
+compute-07.cloud.example.com
+compute-08.cloud.example.com
