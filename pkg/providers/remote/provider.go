@@ -265,8 +265,8 @@ func (p *Provider) ExecuteCommand(ctx context.Context, command string) (stdout, 
 func (p *Provider) getHostKeyCallback() (ssh.HostKeyCallback, error) {
 	// If explicitly set to insecure mode, use InsecureIgnoreHostKey
 	// This is NOT recommended and should only be used in controlled environments
+	// Note: Warning is displayed once at the CLI level, not per-host
 	if p.config.InsecureIgnoreHostKey {
-		fmt.Fprintf(os.Stderr, "WARNING: SSH host key verification is disabled (insecure mode)\n")
 		// #nosec G106 -- Insecure mode is explicitly opt-in via CLI flag with warning
 		return ssh.InsecureIgnoreHostKey(), nil
 	}

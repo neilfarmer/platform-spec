@@ -278,6 +278,15 @@ func runRemoteTest(cmd *cobra.Command, args []string) {
 		fmt.Printf("\n")
 	}
 
+	// Display security warning once if using insecure mode
+	if insecureIgnoreHostKey && len(hosts) > 0 {
+		if len(hosts) == 1 {
+			fmt.Fprintf(os.Stderr, "WARNING: SSH host key verification is disabled (insecure mode)\n")
+		} else {
+			fmt.Fprintf(os.Stderr, "WARNING: SSH host key verification is disabled for %d hosts (insecure mode)\n", len(hosts))
+		}
+	}
+
 	// Test each host
 	ctx := context.Background()
 	multiResults := &core.MultiHostResults{
