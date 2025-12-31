@@ -114,3 +114,116 @@ jobs:
 
       - name: Run Kubernetes integration tests
         run: ./dist/platform-spec test kubernetes examples/kubernetes-basic.yaml --verbose
+
+  jump-host-integration-test:
+    name: SSH Jump Host Integration Test
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build binary
+        run: go build -o dist/platform-spec ./cmd/platform-spec
+
+      - name: Generate SSH keypairs
+        run: |
+          mkdir -p integration/jump-host/ssh-keys
+          ssh-keygen -t rsa -b 2048 -f integration/jump-host/ssh-keys/jump_key -N "" -C "platform-spec-jump"
+          ssh-keygen -t rsa -b 2048 -f integration/jump-host/ssh-keys/target_key -N "" -C "platform-spec-target"
+          chmod 600 integration/jump-host/ssh-keys/jump_key integration/jump-host/ssh-keys/target_key
+
+      - name: Build and start jump host containers
+        run: |
+          cd integration/jump-host
+          docker compose up -d --build
+          sleep 10
+
+      - name: Wait for containers to be ready
+        run: |
+          timeout 30 sh -c 'until docker exec platform-spec-jump pgrep sshd > /dev/null; do sleep 1; done'
+          timeout 30 sh -c 'until docker exec platform-spec-target pgrep sshd > /dev/null; do sleep 1; done'
+
+      - name: Copy SSH keys into containers
+        run: |
+          echo "Copying jump host authorized_keys..."
+          docker cp integration/jump-host/ssh-keys/jump_key.pub platform-spec-jump:/tmp/authorized_keys
+          docker exec platform-spec-jump sh -c 'mv /tmp/authorized_keys /home/testuser/.ssh/authorized_keys && chown testuser:testuser /home/testuser/.ssh/authorized_keys && chmod 600 /home/testuser/.ssh/authorized_keys'
+
+          echo "Copying target host authorized_keys..."
+          docker cp integration/jump-host/ssh-keys/target_key.pub platform-spec-target:/tmp/authorized_keys
+          docker exec platform-spec-target sh -c 'mv /tmp/authorized_keys /home/testuser/.ssh/authorized_keys && chown testuser:testuser /home/testuser/.ssh/authorized_keys && chmod 600 /home/testuser/.ssh/authorized_keys'
+
+          echo "Restarting sshd in containers..."
+          docker exec platform-spec-jump pkill -HUP sshd || true
+          docker exec platform-spec-target pkill -HUP sshd || true
+          sleep 2
+
+      - name: Verify SSH is accepting connections
+        run: |
+          echo "Checking jump host authorized_keys..."
+          docker exec platform-spec-jump cat /home/testuser/.ssh/authorized_keys
+          echo "Checking target host authorized_keys..."
+          docker exec platform-spec-target cat /home/testuser/.ssh/authorized_keys
+          echo "Testing SSH connection to jump host..."
+          timeout 10 sh -c 'until ssh -o StrictHostKeyChecking=no -o BatchMode=yes -p 2222 -i integration/jump-host/ssh-keys/jump_key testuser@localhost exit 2>&1 | grep -qv "Permission denied"; do sleep 1; done' || true
+          sleep 2
+
+      - name: Test jump host with correct keys
+        run: |
+          ./dist/platform-spec test remote \
+            -J testuser@localhost \
+            --jump-port 2222 \
+            --jump-identity integration/jump-host/ssh-keys/jump_key \
+            -i integration/jump-host/ssh-keys/target_key \
+            testuser@target-host \
+            integration/jump-host/spec.yaml \
+            --insecure-ignore-host-key \
+            --verbose
+
+      - name: Test jump host with wrong jump key (should fail)
+        run: |
+          if ./dist/platform-spec test remote \
+            -J testuser@localhost \
+            --jump-port 2222 \
+            --jump-identity integration/jump-host/ssh-keys/target_key \
+            -i integration/jump-host/ssh-keys/jump_key \
+            testuser@target-host \
+            integration/jump-host/spec.yaml \
+            --insecure-ignore-host-key 2>&1 | grep -q "failed to connect to jump host"; then
+            echo "✓ Correctly rejected wrong jump key"
+          else
+            echo "✗ Should have failed with wrong jump key"
+            exit 1
+          fi
+
+      - name: Test jump host with wrong target key (should fail)
+        run: |
+          if ./dist/platform-spec test remote \
+            -J testuser@localhost \
+            --jump-port 2222 \
+            --jump-identity integration/jump-host/ssh-keys/jump_key \
+            -i integration/jump-host/ssh-keys/jump_key \
+            testuser@target-host \
+            integration/jump-host/spec.yaml \
+            --insecure-ignore-host-key 2>&1 | grep -q "failed to establish SSH connection to target"; then
+            echo "✓ Correctly rejected wrong target key"
+          else
+            echo "✗ Should have failed with wrong target key"
+            exit 1
+          fi
+
+      - name: Cleanup jump host environment
+        if: always()
+        run: |
+          cd integration/jump-host
+          docker compose down -v || true
+          rm -rf ssh-keys

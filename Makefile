@@ -1,4 +1,4 @@
-.PHONY: build clean test install release-build deploy-kind-cluster destroy-kind-cluster security-scan security-scan-vuln security-scan-static test-docker test-docker-local test-kubernetes test-integration
+.PHONY: build clean test install release-build deploy-kind-cluster destroy-kind-cluster security-scan security-scan-vuln security-scan-static test-docker test-docker-local test-kubernetes test-integration test-jump destroy-test-jump
 
 # Cluster name for kind
 KIND_CLUSTER_NAME ?= platform-spec-test
@@ -111,3 +111,69 @@ security-scan-static:
 
 # Security scanning - Run both
 security-scan: security-scan-vuln security-scan-static
+
+# Jump host testing - Deploy test environment
+test-jump: build
+	@echo "=== Setting up Jump Host Test Environment ==="
+	@echo ""
+	@echo "Creating SSH keypairs (jump and target)..."
+	@mkdir -p integration/jump-host/ssh-keys
+	@if [ ! -f integration/jump-host/ssh-keys/jump_key ]; then \
+		ssh-keygen -t rsa -b 2048 -f integration/jump-host/ssh-keys/jump_key -N "" -C "platform-spec-jump"; \
+		chmod 600 integration/jump-host/ssh-keys/jump_key; \
+		chmod 644 integration/jump-host/ssh-keys/jump_key.pub; \
+		echo "Created jump_key"; \
+	else \
+		echo "jump_key already exists"; \
+	fi
+	@if [ ! -f integration/jump-host/ssh-keys/target_key ]; then \
+		ssh-keygen -t rsa -b 2048 -f integration/jump-host/ssh-keys/target_key -N "" -C "platform-spec-target"; \
+		chmod 600 integration/jump-host/ssh-keys/target_key; \
+		chmod 644 integration/jump-host/ssh-keys/target_key.pub; \
+		echo "Created target_key"; \
+	else \
+		echo "target_key already exists"; \
+	fi
+	@echo ""
+	@echo "Building and starting containers..."
+	@cd integration/jump-host && docker compose up -d --build
+	@echo ""
+	@echo "Waiting for containers to be ready..."
+	@sleep 5
+	@echo ""
+	@echo "Copying SSH keys into containers..."
+	@docker cp integration/jump-host/ssh-keys/jump_key.pub platform-spec-jump:/tmp/authorized_keys
+	@docker exec platform-spec-jump sh -c 'mv /tmp/authorized_keys /home/testuser/.ssh/authorized_keys && chown testuser:testuser /home/testuser/.ssh/authorized_keys && chmod 600 /home/testuser/.ssh/authorized_keys'
+	@docker cp integration/jump-host/ssh-keys/target_key.pub platform-spec-target:/tmp/authorized_keys
+	@docker exec platform-spec-target sh -c 'mv /tmp/authorized_keys /home/testuser/.ssh/authorized_keys && chown testuser:testuser /home/testuser/.ssh/authorized_keys && chmod 600 /home/testuser/.ssh/authorized_keys'
+	@docker exec platform-spec-jump pkill -HUP sshd || true
+	@docker exec platform-spec-target pkill -HUP sshd || true
+	@sleep 2
+	@echo ""
+	@echo "Adding jump host to known_hosts..."
+	@ssh-keyscan -p 2222 -H localhost >> ~/.ssh/known_hosts 2>/dev/null || true
+	@echo ""
+	@echo "✅ Jump host test environment is ready!"
+	@echo ""
+	@echo "Test with SEPARATE keys (jump-key for jump host, target-key for target):"
+	@echo "  ./dist/platform-spec test remote -J testuser@localhost --jump-port 2222 --jump-identity integration/jump-host/ssh-keys/jump_key -i integration/jump-host/ssh-keys/target_key testuser@target-host integration/jump-host/spec.yaml --insecure-ignore-host-key --verbose"
+	@echo ""
+	@echo "Or test direct connections:"
+	@echo "  ssh -i integration/jump-host/ssh-keys/jump_key -p 2222 testuser@localhost"
+	@echo ""
+	@echo "When done, run: make destroy-test-jump"
+
+# Jump host testing - Destroy test environment
+destroy-test-jump:
+	@echo "=== Tearing down Jump Host Test Environment ==="
+	@echo ""
+	@echo "Stopping and removing containers..."
+	@cd integration/jump-host && docker compose down -v 2>/dev/null || true
+	@echo ""
+	@echo "Removing SSH keypair..."
+	@rm -rf integration/jump-host/ssh-keys
+	@echo ""
+	@echo "Removing known_hosts entries for localhost:2222..."
+	@ssh-keygen -R "[localhost]:2222" 2>/dev/null || true
+	@echo ""
+	@echo "✅ Jump host test environment destroyed"

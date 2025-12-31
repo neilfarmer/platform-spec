@@ -16,8 +16,9 @@ import (
 
 // Provider implements remote system testing via SSH
 type Provider struct {
-	client *ssh.Client
-	config *Config
+	client     *ssh.Client
+	jumpClient *ssh.Client // Jump host client (if using jump host)
+	config     *Config
 }
 
 // Config holds remote connection configuration
@@ -30,6 +31,10 @@ type Config struct {
 	StrictHostKeyChecking  bool   // Enable strict host key checking (default: true)
 	KnownHostsFile         string // Path to known_hosts file (default: ~/.ssh/known_hosts)
 	InsecureIgnoreHostKey  bool   // Disable host key verification (INSECURE, not recommended)
+	JumpHost               string // Jump host (bastion) hostname or IP
+	JumpPort               int    // Jump host SSH port (default: 22)
+	JumpUser               string // Jump host SSH user
+	JumpIdentityFile       string // SSH private key for jump host (optional, defaults to IdentityFile)
 }
 
 // ParseTarget parses a target string like "user@host" or "host"
@@ -55,42 +60,45 @@ func NewProvider(config *Config) *Provider {
 }
 
 // Connect establishes the SSH connection
+// If a jump host is configured, it will connect through the jump host
 func (p *Provider) Connect(ctx context.Context) error {
-	authMethods := []ssh.AuthMethod{}
-
-	// Try SSH key file authentication if provided
-	if p.config.IdentityFile != "" {
-		key, err := os.ReadFile(p.config.IdentityFile)
-		if err != nil {
-			return fmt.Errorf("failed to read private key: %w", err)
-		}
-
-		signer, err := ssh.ParsePrivateKey(key)
-		if err != nil {
-			return fmt.Errorf("failed to parse private key: %w", err)
-		}
-
-		authMethods = append(authMethods, ssh.PublicKeys(signer))
-	}
-
-	// Try SSH agent authentication
-	if sshAgent, err := getSSHAgent(); err == nil {
-		authMethods = append(authMethods, ssh.PublicKeysCallback(sshAgent.Signers))
-	}
-
-	if len(authMethods) == 0 {
-		return fmt.Errorf("no authentication method available (no key file provided and no SSH agent found)")
-	}
-
 	// Configure host key verification
 	hostKeyCallback, err := p.getHostKeyCallback()
 	if err != nil {
 		return fmt.Errorf("failed to configure host key verification: %w", err)
 	}
 
+	// If jump host is configured, connect through it with separate auth
+	if p.config.JumpHost != "" {
+		// Build auth methods for jump host
+		jumpAuthMethods, err := p.buildAuthMethods(p.config.JumpIdentityFile, "jump host")
+		if err != nil {
+			return err
+		}
+
+		// Build auth methods for target host
+		targetAuthMethods, err := p.buildAuthMethods(p.config.IdentityFile, "target host")
+		if err != nil {
+			return err
+		}
+
+		client, err := p.connectViaJumpHost(jumpAuthMethods, targetAuthMethods, hostKeyCallback)
+		if err != nil {
+			return err
+		}
+		p.client = client
+		return nil
+	}
+
+	// Direct connection (no jump host) - use target auth methods
+	targetAuthMethods, err := p.buildAuthMethods(p.config.IdentityFile, "target host")
+	if err != nil {
+		return err
+	}
+
 	sshConfig := &ssh.ClientConfig{
 		User:            p.config.User,
-		Auth:            authMethods,
+		Auth:            targetAuthMethods,
 		HostKeyCallback: hostKeyCallback,
 		Timeout:         p.config.Timeout,
 	}
@@ -105,12 +113,116 @@ func (p *Provider) Connect(ctx context.Context) error {
 	return nil
 }
 
-// Close closes the SSH connection
-func (p *Provider) Close() error {
-	if p.client != nil {
-		return p.client.Close()
+// buildAuthMethods creates SSH authentication methods for a given identity file
+// If identityFile is empty, it falls back to SSH agent only
+func (p *Provider) buildAuthMethods(identityFile string, hostType string) ([]ssh.AuthMethod, error) {
+	var authMethods []ssh.AuthMethod
+
+	// Try SSH key file authentication if provided
+	if identityFile != "" {
+		// #nosec G304 -- Reading user-specified SSH key file is intentional and required functionality.
+		// The user controls the path via CLI flag, similar to ssh -i flag behavior.
+		key, err := os.ReadFile(identityFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read private key for %s: %w", hostType, err)
+		}
+
+		signer, err := ssh.ParsePrivateKey(key)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse private key for %s: %w", hostType, err)
+		}
+
+		authMethods = append(authMethods, ssh.PublicKeys(signer))
 	}
-	return nil
+
+	// Try SSH agent authentication as fallback
+	if sshAgent, err := getSSHAgent(); err == nil {
+		authMethods = append(authMethods, ssh.PublicKeysCallback(sshAgent.Signers))
+	}
+
+	if len(authMethods) == 0 {
+		return nil, fmt.Errorf("no authentication method available for %s (no key file provided and no SSH agent found)", hostType)
+	}
+
+	return authMethods, nil
+}
+
+// connectViaJumpHost establishes an SSH connection through a jump host
+// jumpAuthMethods: authentication for the jump host
+// targetAuthMethods: authentication for the target host (can be different)
+func (p *Provider) connectViaJumpHost(jumpAuthMethods, targetAuthMethods []ssh.AuthMethod, hostKeyCallback ssh.HostKeyCallback) (*ssh.Client, error) {
+	// First, connect to the jump host using jump host auth methods
+	jumpConfig := &ssh.ClientConfig{
+		User:            p.config.JumpUser,
+		Auth:            jumpAuthMethods,
+		HostKeyCallback: hostKeyCallback,
+		Timeout:         p.config.Timeout,
+	}
+
+	jumpAddr := fmt.Sprintf("%s:%d", p.config.JumpHost, p.config.JumpPort)
+	jumpClient, err := ssh.Dial("tcp", jumpAddr, jumpConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to jump host %s: %w", jumpAddr, err)
+	}
+
+	// Store the jump client so it can be closed later
+	p.jumpClient = jumpClient
+
+	// Use the jump host connection to dial the target host
+	targetAddr := fmt.Sprintf("%s:%d", p.config.Host, p.config.Port)
+	targetConn, err := jumpClient.Dial("tcp", targetAddr)
+	if err != nil {
+		// #nosec G104 -- Already in error path, ignoring close error is acceptable
+		jumpClient.Close()
+		return nil, fmt.Errorf("failed to dial target %s through jump host: %w", targetAddr, err)
+	}
+
+	// Create SSH connection to target using target host auth methods
+	targetConfig := &ssh.ClientConfig{
+		User:            p.config.User,
+		Auth:            targetAuthMethods,
+		HostKeyCallback: hostKeyCallback,
+		Timeout:         p.config.Timeout,
+	}
+
+	ncc, chans, reqs, err := ssh.NewClientConn(targetConn, targetAddr, targetConfig)
+	if err != nil {
+		// #nosec G104 -- Already in error path, cleanup errors can be safely ignored
+		targetConn.Close()
+		// #nosec G104 -- Already in error path, cleanup errors can be safely ignored
+		jumpClient.Close()
+		return nil, fmt.Errorf("failed to establish SSH connection to target %s: %w", targetAddr, err)
+	}
+
+	// Create the target client
+	targetClient := ssh.NewClient(ncc, chans, reqs)
+
+	return targetClient, nil
+}
+
+// Close closes the SSH connection(s)
+// If using a jump host, both the target and jump host connections are closed
+func (p *Provider) Close() error {
+	var err error
+
+	// Close target client first
+	if p.client != nil {
+		if closeErr := p.client.Close(); closeErr != nil {
+			err = closeErr
+		}
+	}
+
+	// Close jump host client if it exists
+	if p.jumpClient != nil {
+		if closeErr := p.jumpClient.Close(); closeErr != nil {
+			// Return the first error, but try to close both
+			if err == nil {
+				err = closeErr
+			}
+		}
+	}
+
+	return err
 }
 
 // ExecuteCommand executes a command via SSH and returns stdout, stderr, and exit code

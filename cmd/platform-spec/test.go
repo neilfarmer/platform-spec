@@ -25,6 +25,10 @@ var (
 	strictHostKeyChecking bool
 	knownHostsFile        string
 	insecureIgnoreHostKey bool
+	jumpHost              string
+	jumpPort              int
+	jumpUser              string
+	jumpIdentityFile      string
 
 	// Kubernetes flags
 	kubeconfig    string
@@ -93,6 +97,10 @@ func init() {
 	remoteCmd.Flags().BoolVar(&strictHostKeyChecking, "strict-host-key-checking", true, "Enable strict host key checking (default: true)")
 	remoteCmd.Flags().StringVar(&knownHostsFile, "known-hosts-file", "", "Path to known_hosts file (default: ~/.ssh/known_hosts)")
 	remoteCmd.Flags().BoolVar(&insecureIgnoreHostKey, "insecure-ignore-host-key", false, "Disable host key verification (INSECURE, not recommended)")
+	remoteCmd.Flags().StringVarP(&jumpHost, "jump-host", "J", "", "Jump host (bastion) for SSH connection (format: [user@]host)")
+	remoteCmd.Flags().IntVar(&jumpPort, "jump-port", 22, "Jump host SSH port (default: 22)")
+	remoteCmd.Flags().StringVar(&jumpUser, "jump-user", "", "Jump host SSH user (overrides user from --jump-host)")
+	remoteCmd.Flags().StringVar(&jumpIdentityFile, "jump-identity", "", "SSH private key for jump host (defaults to --identity if not specified)")
 
 	// Output flags (shared across all test commands)
 	remoteCmd.Flags().StringVarP(&outputFormat, "output", "o", "human", "Output format (human, json, junit)")
@@ -121,14 +129,15 @@ func runRemoteTest(cmd *cobra.Command, args []string) {
 	target := args[0]
 	specFiles := args[1:]
 
-	if verbose {
-		fmt.Printf("Target: %s\n", target)
-		fmt.Printf("Port: %d\n", remotePort)
-		if identityFile != "" {
-			fmt.Printf("Identity: %s\n", identityFile)
+	// Parse and validate spec files FIRST (fail fast)
+	var specs []*core.Spec
+	for _, specFile := range specFiles {
+		spec, err := core.ParseSpec(specFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to parse spec %s: %v\n", specFile, err)
+			os.Exit(1)
 		}
-		fmt.Printf("Spec files: %v\n", specFiles)
-		fmt.Printf("\n")
+		specs = append(specs, spec)
 	}
 
 	// Parse target
@@ -136,6 +145,38 @@ func runRemoteTest(cmd *cobra.Command, args []string) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
+	}
+
+	// Parse jump host if provided
+	var parsedJumpHost, parsedJumpUser string
+	if jumpHost != "" {
+		parsedJumpUser, parsedJumpHost, err = remote.ParseTarget(jumpHost, "")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error parsing jump host: %v\n", err)
+			os.Exit(1)
+		}
+		// Allow explicit jump user override
+		if jumpUser != "" {
+			parsedJumpUser = jumpUser
+		}
+		// Default jump identity to main identity if not specified (backwards compatibility)
+		if jumpIdentityFile == "" {
+			jumpIdentityFile = identityFile
+		}
+	}
+
+	if verbose {
+		fmt.Printf("Target: %s\n", target)
+		fmt.Printf("Port: %d\n", remotePort)
+		if identityFile != "" {
+			fmt.Printf("Identity: %s\n", identityFile)
+		}
+		if jumpHost != "" {
+			fmt.Printf("Jump Host: %s\n", jumpHost)
+			fmt.Printf("Jump Port: %d\n", jumpPort)
+		}
+		fmt.Printf("Spec files: %v\n", specFiles)
+		fmt.Printf("\n")
 	}
 
 	// Create remote provider
@@ -148,6 +189,10 @@ func runRemoteTest(cmd *cobra.Command, args []string) {
 		StrictHostKeyChecking: strictHostKeyChecking,
 		KnownHostsFile:        knownHostsFile,
 		InsecureIgnoreHostKey: insecureIgnoreHostKey,
+		JumpHost:              parsedJumpHost,
+		JumpPort:              jumpPort,
+		JumpUser:              parsedJumpUser,
+		JumpIdentityFile:      jumpIdentityFile,
 	})
 
 	// Connect to target
@@ -164,13 +209,7 @@ func runRemoteTest(cmd *cobra.Command, args []string) {
 
 	// Execute tests for each spec file
 	var allResults []*core.TestResults
-	for _, specFile := range specFiles {
-		// Parse spec
-		spec, err := core.ParseSpec(specFile)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to parse spec %s: %v\n", specFile, err)
-			os.Exit(1)
-		}
+	for _, spec := range specs {
 
 		// Execute tests with plugins
 		executor := core.NewExecutor(spec, remoteProvider, system.NewSystemPlugin(), k8splugin.NewKubernetesPlugin())
