@@ -358,8 +358,8 @@ jobs:
       - name: Build binary
         run: go build -o dist/platform-spec ./cmd/platform-spec
 
-      - name: Build Linux binary for container
-        run: GOOS=linux GOARCH=amd64 go build -o dist/platform-spec-linux ./cmd/platform-spec
+      - name: Build Linux binary for container (statically linked for Alpine)
+        run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/platform-spec-linux ./cmd/platform-spec
 
       - name: Make binary executable
         run: chmod +x dist/platform-spec-linux
