@@ -1,4 +1,4 @@
-.PHONY: build clean test install release-build deploy-kind-cluster destroy-kind-cluster security-scan security-scan-vuln security-scan-static test-docker test-docker-local test-kubernetes test-integration test-inventory test-integration-imports test-bad-inventory test-jump destroy-test-jump
+.PHONY: build clean test install release-build deploy-kind-cluster destroy-kind-cluster security-scan security-scan-vuln security-scan-static test-docker test-docker-local test-kubernetes test-integration test-inventory test-integration-imports test-bad-inventory test-jump destroy-test-jump test-parallel-performance
 
 # Cluster name for kind
 KIND_CLUSTER_NAME ?= platform-spec-test
@@ -85,6 +85,9 @@ test-docker-local:
 # Kubernetes integration test (matches CI pipeline)
 test-kubernetes: deploy-kind-cluster build
 	@echo ""
+	@echo "Waiting for CoreDNS to be ready..."
+	@kubectl wait --for=condition=available --timeout=120s deployment/coredns -n kube-system || true
+	@sleep 5
 	@echo "Running Kubernetes integration tests..."
 	@./dist/platform-spec test kubernetes examples/kubernetes-basic.yaml $(VERBOSE_FLAG)
 
@@ -122,6 +125,9 @@ test-integration: test-docker-local test-inventory test-integration-imports
 	@echo "Running Kubernetes integration tests (with cluster deploy/destroy)..."
 	@$(MAKE) test-kubernetes || ($(MAKE) destroy-kind-cluster && exit 1)
 	@$(MAKE) destroy-kind-cluster
+	@echo ""
+	@echo "Running parallel execution performance tests..."
+	@$(MAKE) test-parallel-performance
 	@echo ""
 	@echo "✅ All integration tests completed successfully!"
 
@@ -209,3 +215,17 @@ destroy-test-jump:
 	@ssh-keygen -R "[localhost]:2222" 2>/dev/null || true
 	@echo ""
 	@echo "✅ Jump host test environment destroyed"
+
+# Parallel execution performance test
+test-parallel-performance: build
+	@echo "=== Running Parallel Execution Performance Tests ==="
+	@echo ""
+	@echo "This will:"
+	@echo "  - Spin up 30 SSH test containers"
+	@echo "  - Test sequential vs parallel execution"
+	@echo "  - Measure performance with 10, 15, and 30 workers"
+	@echo "  - Show speedup improvements"
+	@echo ""
+	@echo "Note: First run will download Docker images (~3 minutes)"
+	@echo ""
+	@cd integration && ./test-parallel.sh

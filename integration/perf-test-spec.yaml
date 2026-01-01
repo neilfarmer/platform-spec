@@ -1,0 +1,33 @@
+version: "1.0"
+
+metadata:
+  name: "Performance Test Spec"
+  description: "Test spec with realistic delays to measure parallel execution improvements"
+
+tests:
+  # Package check - typical SSH command with parsing
+  packages:
+    - name: "bash package installed"
+      packages: [bash]
+      state: present
+
+  # File checks - stat commands
+  files:
+    - name: "/tmp directory exists"
+      path: /tmp
+      type: directory
+
+    - name: "/etc directory exists"
+      path: /etc
+      type: directory
+
+  # User check - multiple getent/id commands
+  users:
+    - name: "root user exists"
+      user: root
+
+  # Command with slight delay to simulate realistic testing
+  command_content:
+    - name: "system uptime check"
+      command: "uptime && sleep 0.5"
+      contains: ["load average"]
