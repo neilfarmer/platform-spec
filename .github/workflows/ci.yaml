@@ -361,6 +361,9 @@ jobs:
       - name: Build Linux binary for container
         run: GOOS=linux GOARCH=amd64 go build -o dist/platform-spec-linux ./cmd/platform-spec
 
+      - name: Make binary executable
+        run: chmod +x dist/platform-spec-linux
+
       - name: Generate SSH key
         run: |
           mkdir -p integration
