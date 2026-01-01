@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"time"
 
 	"github.com/neilfarmer/platform-spec/pkg/core"
@@ -41,6 +43,11 @@ var (
 	outputFormat string
 	verbose      bool
 	noColor      bool
+
+	// Parallel execution flags
+	parallel    string
+	maxParallel int
+	failFast    bool
 )
 
 var testCmd = &cobra.Command{
@@ -111,6 +118,11 @@ func init() {
 	remoteCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Verbose output")
 	remoteCmd.Flags().BoolVar(&noColor, "no-color", false, "Disable colored output")
 
+	// Parallel execution flags
+	remoteCmd.Flags().StringVar(&parallel, "parallel", "1", "Number of concurrent workers (integer or 'auto' for auto-detect)")
+	remoteCmd.Flags().IntVar(&maxParallel, "max-parallel", 50, "Maximum number of concurrent workers (safety cap)")
+	remoteCmd.Flags().BoolVar(&failFast, "fail-fast", false, "Stop testing remaining hosts on first failure")
+
 	// Local command flags
 	localCmd.Flags().StringVarP(&outputFormat, "output", "o", "human", "Output format (human, json, junit)")
 	localCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Verbose output")
@@ -130,6 +142,38 @@ func init() {
 	testCmd.AddCommand(awsCmd)
 	testCmd.AddCommand(openstackCmd)
 	testCmd.AddCommand(kubernetesCmd)
+}
+
+// parseParallelFlag parses the --parallel flag value and returns the number of workers
+func parseParallelFlag(parallelStr string, maxParallel int) (int, error) {
+	if parallelStr == "auto" {
+		// Auto-detect: Use runtime.NumCPU() with cap
+		workers := runtime.NumCPU()
+		if workers > maxParallel {
+			workers = maxParallel
+		}
+		if workers < 1 {
+			workers = 1
+		}
+		return workers, nil
+	}
+
+	// Parse as integer
+	workers, err := strconv.Atoi(parallelStr)
+	if err != nil {
+		return 0, fmt.Errorf("invalid --parallel value: %s (must be integer or 'auto')", parallelStr)
+	}
+
+	if workers < 1 {
+		return 0, fmt.Errorf("--parallel must be at least 1, got %d", workers)
+	}
+
+	// Apply max-parallel cap
+	if workers > maxParallel {
+		workers = maxParallel
+	}
+
+	return workers, nil
 }
 
 // testSingleHost tests a single host with the given specs
@@ -247,9 +291,23 @@ func runRemoteTest(cmd *cobra.Command, args []string) {
 		specs = append(specs, spec)
 	}
 
+	// Parse parallel flags
+	workers, err := parseParallelFlag(parallel, maxParallel)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	if verbose && workers > 1 {
+		fmt.Printf("Parallel execution: %d workers\n", workers)
+		if failFast {
+			fmt.Printf("Fail-fast: enabled\n")
+		}
+		fmt.Printf("\n")
+	}
+
 	// Parse jump host if provided
 	var parsedJumpHost, parsedJumpUser string
-	var err error
 	if jumpHost != "" {
 		parsedJumpUser, parsedJumpHost, err = remote.ParseTarget(jumpHost, "")
 		if err != nil {
@@ -287,30 +345,22 @@ func runRemoteTest(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	// Test each host
-	ctx := context.Background()
-	multiResults := &core.MultiHostResults{
-		Hosts: make([]*core.HostResults, 0, len(hosts)),
-	}
-	overallStart := time.Now()
-
+	// Build job list for all hosts
+	var jobs []core.HostJob
 	for _, hostEntry := range hosts {
 		// Parse host entry - may be "host" or "user@host"
-		var hostUser, hostname string
 		parsedUser, parsedHost, err := remote.ParseTarget(hostEntry, defaultUser)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to parse host entry '%s': %v\n", hostEntry, err)
 			fmt.Print(output.PrintFailed())
 			os.Exit(1)
 		}
-		hostUser = parsedUser
-		hostname = parsedHost
 
 		// Create config for this host
 		config := &remote.Config{
-			Host:                  hostname,
+			Host:                  parsedHost,
 			Port:                  remotePort,
-			User:                  hostUser,
+			User:                  parsedUser,
 			IdentityFile:          identityFile,
 			Timeout:               time.Duration(timeout) * time.Second,
 			StrictHostKeyChecking: strictHostKeyChecking,
@@ -322,16 +372,63 @@ func runRemoteTest(cmd *cobra.Command, args []string) {
 			JumpIdentityFile:      jumpIdentityFile,
 		}
 
-		// Test this host
-		hostResult, err := testSingleHost(ctx, hostname, hostUser, specs, config)
-		if err != nil && hostResult == nil {
-			// Unexpected error (not a connection error)
-			fmt.Fprintf(os.Stderr, "Failed to test host %s: %v\n", hostname, err)
-			fmt.Print(output.PrintFailed())
+		jobs = append(jobs, core.HostJob{
+			HostEntry: hostEntry,
+			User:      parsedUser,
+			Config:    config,
+		})
+	}
+
+	// Create test function wrapper
+	testFunc := func(ctx context.Context, job core.HostJob) (*core.HostResults, error) {
+		config := job.Config.(*remote.Config)
+		return testSingleHost(ctx, config.Host, config.User, specs, config)
+	}
+
+	// Execute tests (sequential or parallel based on workers)
+	ctx := context.Background()
+	var multiResults *core.MultiHostResults
+	overallStart := time.Now()
+
+	if workers == 1 {
+		// Sequential execution (backward compatible)
+		multiResults = &core.MultiHostResults{
+			Hosts: make([]*core.HostResults, 0, len(jobs)),
+		}
+
+		for _, job := range jobs {
+			hostResult, err := testFunc(ctx, job)
+			if err != nil && hostResult == nil {
+				// Unexpected error (not a connection error)
+				fmt.Fprintf(os.Stderr, "Failed to test host: %v\n", err)
+				fmt.Print(output.PrintFailed())
+				os.Exit(1)
+			}
+
+			multiResults.Hosts = append(multiResults.Hosts, hostResult)
+
+			// Check fail-fast in sequential mode
+			if failFast && !hostResult.Success() {
+				if verbose {
+					fmt.Fprintf(os.Stderr, "Fail-fast: stopping due to failure on %s\n", hostResult.Target)
+				}
+				break
+			}
+		}
+	} else {
+		// Parallel execution
+		executor := core.NewParallelExecutor(workers, failFast, verbose)
+		multiResults, err = executor.Execute(jobs, testFunc)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Parallel execution failed: %v\n", err)
 			os.Exit(1)
 		}
 
-		multiResults.Hosts = append(multiResults.Hosts, hostResult)
+		// Clear progress line before showing results
+		if !verbose {
+			output.ClearProgressLine()
+			fmt.Fprintf(os.Stderr, "\n")
+		}
 	}
 
 	multiResults.TotalDuration = time.Since(overallStart)

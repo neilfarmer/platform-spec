@@ -1,0 +1,372 @@
+services:
+  # SSH test containers
+  # Using alpine-based SSH server for lightweight testing
+  ssh-test-base: &ssh-test-base
+    image: linuxserver/openssh-server:latest
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+      - PUBLIC_KEY_FILE=/config/authorized_keys
+      - SUDO_ACCESS=true
+      - PASSWORD_ACCESS=false
+      - USER_NAME=testuser
+    volumes:
+      - ./ssh-test-key.pub:/config/authorized_keys:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2222"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  # Create 50 SSH test containers
+  ssh-test-1:
+    <<: *ssh-test-base
+    container_name: ssh-test-1
+    hostname: ssh-test-1
+    ports:
+      - "2201:2222"
+
+  ssh-test-2:
+    <<: *ssh-test-base
+    container_name: ssh-test-2
+    hostname: ssh-test-2
+    ports:
+      - "2202:2222"
+
+  ssh-test-3:
+    <<: *ssh-test-base
+    container_name: ssh-test-3
+    hostname: ssh-test-3
+    ports:
+      - "2203:2222"
+
+  ssh-test-4:
+    <<: *ssh-test-base
+    container_name: ssh-test-4
+    hostname: ssh-test-4
+    ports:
+      - "2204:2222"
+
+  ssh-test-5:
+    <<: *ssh-test-base
+    container_name: ssh-test-5
+    hostname: ssh-test-5
+    ports:
+      - "2205:2222"
+
+  ssh-test-6:
+    <<: *ssh-test-base
+    container_name: ssh-test-6
+    hostname: ssh-test-6
+    ports:
+      - "2206:2222"
+
+  ssh-test-7:
+    <<: *ssh-test-base
+    container_name: ssh-test-7
+    hostname: ssh-test-7
+    ports:
+      - "2207:2222"
+
+  ssh-test-8:
+    <<: *ssh-test-base
+    container_name: ssh-test-8
+    hostname: ssh-test-8
+    ports:
+      - "2208:2222"
+
+  ssh-test-9:
+    <<: *ssh-test-base
+    container_name: ssh-test-9
+    hostname: ssh-test-9
+    ports:
+      - "2209:2222"
+
+  ssh-test-10:
+    <<: *ssh-test-base
+    container_name: ssh-test-10
+    hostname: ssh-test-10
+    ports:
+      - "2210:2222"
+
+  ssh-test-11:
+    <<: *ssh-test-base
+    container_name: ssh-test-11
+    hostname: ssh-test-11
+    ports:
+      - "2211:2222"
+
+  ssh-test-12:
+    <<: *ssh-test-base
+    container_name: ssh-test-12
+    hostname: ssh-test-12
+    ports:
+      - "2212:2222"
+
+  ssh-test-13:
+    <<: *ssh-test-base
+    container_name: ssh-test-13
+    hostname: ssh-test-13
+    ports:
+      - "2213:2222"
+
+  ssh-test-14:
+    <<: *ssh-test-base
+    container_name: ssh-test-14
+    hostname: ssh-test-14
+    ports:
+      - "2214:2222"
+
+  ssh-test-15:
+    <<: *ssh-test-base
+    container_name: ssh-test-15
+    hostname: ssh-test-15
+    ports:
+      - "2215:2222"
+
+  ssh-test-16:
+    <<: *ssh-test-base
+    container_name: ssh-test-16
+    hostname: ssh-test-16
+    ports:
+      - "2216:2222"
+
+  ssh-test-17:
+    <<: *ssh-test-base
+    container_name: ssh-test-17
+    hostname: ssh-test-17
+    ports:
+      - "2217:2222"
+
+  ssh-test-18:
+    <<: *ssh-test-base
+    container_name: ssh-test-18
+    hostname: ssh-test-18
+    ports:
+      - "2218:2222"
+
+  ssh-test-19:
+    <<: *ssh-test-base
+    container_name: ssh-test-19
+    hostname: ssh-test-19
+    ports:
+      - "2219:2222"
+
+  ssh-test-20:
+    <<: *ssh-test-base
+    container_name: ssh-test-20
+    hostname: ssh-test-20
+    ports:
+      - "2220:2222"
+
+  ssh-test-21:
+    <<: *ssh-test-base
+    container_name: ssh-test-21
+    hostname: ssh-test-21
+    ports:
+      - "2221:2222"
+
+  ssh-test-22:
+    <<: *ssh-test-base
+    container_name: ssh-test-22
+    hostname: ssh-test-22
+    ports:
+      - "2222:2222"
+
+  ssh-test-23:
+    <<: *ssh-test-base
+    container_name: ssh-test-23
+    hostname: ssh-test-23
+    ports:
+      - "2223:2222"
+
+  ssh-test-24:
+    <<: *ssh-test-base
+    container_name: ssh-test-24
+    hostname: ssh-test-24
+    ports:
+      - "2224:2222"
+
+  ssh-test-25:
+    <<: *ssh-test-base
+    container_name: ssh-test-25
+    hostname: ssh-test-25
+    ports:
+      - "2225:2222"
+
+  ssh-test-26:
+    <<: *ssh-test-base
+    container_name: ssh-test-26
+    hostname: ssh-test-26
+    ports:
+      - "2226:2222"
+
+  ssh-test-27:
+    <<: *ssh-test-base
+    container_name: ssh-test-27
+    hostname: ssh-test-27
+    ports:
+      - "2227:2222"
+
+  ssh-test-28:
+    <<: *ssh-test-base
+    container_name: ssh-test-28
+    hostname: ssh-test-28
+    ports:
+      - "2228:2222"
+
+  ssh-test-29:
+    <<: *ssh-test-base
+    container_name: ssh-test-29
+    hostname: ssh-test-29
+    ports:
+      - "2229:2222"
+
+  ssh-test-30:
+    <<: *ssh-test-base
+    container_name: ssh-test-30
+    hostname: ssh-test-30
+    ports:
+      - "2230:2222"
+
+  ssh-test-31:
+    <<: *ssh-test-base
+    container_name: ssh-test-31
+    hostname: ssh-test-31
+    ports:
+      - "2231:2222"
+
+  ssh-test-32:
+    <<: *ssh-test-base
+    container_name: ssh-test-32
+    hostname: ssh-test-32
+    ports:
+      - "2232:2222"
+
+  ssh-test-33:
+    <<: *ssh-test-base
+    container_name: ssh-test-33
+    hostname: ssh-test-33
+    ports:
+      - "2233:2222"
+
+  ssh-test-34:
+    <<: *ssh-test-base
+    container_name: ssh-test-34
+    hostname: ssh-test-34
+    ports:
+      - "2234:2222"
+
+  ssh-test-35:
+    <<: *ssh-test-base
+    container_name: ssh-test-35
+    hostname: ssh-test-35
+    ports:
+      - "2235:2222"
+
+  ssh-test-36:
+    <<: *ssh-test-base
+    container_name: ssh-test-36
+    hostname: ssh-test-36
+    ports:
+      - "2236:2222"
+
+  ssh-test-37:
+    <<: *ssh-test-base
+    container_name: ssh-test-37
+    hostname: ssh-test-37
+    ports:
+      - "2237:2222"
+
+  ssh-test-38:
+    <<: *ssh-test-base
+    container_name: ssh-test-38
+    hostname: ssh-test-38
+    ports:
+      - "2238:2222"
+
+  ssh-test-39:
+    <<: *ssh-test-base
+    container_name: ssh-test-39
+    hostname: ssh-test-39
+    ports:
+      - "2239:2222"
+
+  ssh-test-40:
+    <<: *ssh-test-base
+    container_name: ssh-test-40
+    hostname: ssh-test-40
+    ports:
+      - "2240:2222"
+
+  ssh-test-41:
+    <<: *ssh-test-base
+    container_name: ssh-test-41
+    hostname: ssh-test-41
+    ports:
+      - "2241:2222"
+
+  ssh-test-42:
+    <<: *ssh-test-base
+    container_name: ssh-test-42
+    hostname: ssh-test-42
+    ports:
+      - "2242:2222"
+
+  ssh-test-43:
+    <<: *ssh-test-base
+    container_name: ssh-test-43
+    hostname: ssh-test-43
+    ports:
+      - "2243:2222"
+
+  ssh-test-44:
+    <<: *ssh-test-base
+    container_name: ssh-test-44
+    hostname: ssh-test-44
+    ports:
+      - "2244:2222"
+
+  ssh-test-45:
+    <<: *ssh-test-base
+    container_name: ssh-test-45
+    hostname: ssh-test-45
+    ports:
+      - "2245:2222"
+
+  ssh-test-46:
+    <<: *ssh-test-base
+    container_name: ssh-test-46
+    hostname: ssh-test-46
+    ports:
+      - "2246:2222"
+
+  ssh-test-47:
+    <<: *ssh-test-base
+    container_name: ssh-test-47
+    hostname: ssh-test-47
+    ports:
+      - "2247:2222"
+
+  ssh-test-48:
+    <<: *ssh-test-base
+    container_name: ssh-test-48
+    hostname: ssh-test-48
+    ports:
+      - "2248:2222"
+
+  ssh-test-49:
+    <<: *ssh-test-base
+    container_name: ssh-test-49
+    hostname: ssh-test-49
+    ports:
+      - "2249:2222"
+
+  ssh-test-50:
+    <<: *ssh-test-base
+    container_name: ssh-test-50
+    hostname: ssh-test-50
+    ports:
+      - "2250:2222"

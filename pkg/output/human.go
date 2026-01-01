@@ -2,6 +2,7 @@ package output
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/jedib0t/go-pretty/v6/table"
@@ -362,4 +363,9 @@ func PrintFailed() string {
 // PrintPassed prints a PASSED status message
 func PrintPassed() string {
 	return "\n" + applyColor(colorBold+colorGreen, "✅ PASSED") + "\n"
+}
+
+// ClearProgressLine clears the current progress line
+func ClearProgressLine() {
+	fmt.Fprint(os.Stderr, "\r\033[K") // Carriage return + clear line
 }
