@@ -1,3 +1,9 @@
+.DEFAULT_GOAL := _setup
+
+
+.PHONY: _setup
+_setup:
+	@node .github/setup.js
 .PHONY: build clean test install release-build deploy-kind-cluster destroy-kind-cluster security-scan security-scan-vuln security-scan-static test-docker test-docker-local test-kubernetes test-integration test-inventory test-integration-imports test-bad-inventory test-jump destroy-test-jump test-parallel-performance custom-test
 
 # Cluster name for kind
