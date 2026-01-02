@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/neilfarmer/platform-spec/pkg/retry"
 	ssh_config "github.com/kevinburke/ssh_config"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
@@ -29,13 +30,14 @@ type Config struct {
 	User                   string
 	IdentityFile           string
 	Timeout                time.Duration
-	StrictHostKeyChecking  bool   // Enable strict host key checking (default: true)
-	KnownHostsFile         string // Path to known_hosts file (default: ~/.ssh/known_hosts)
-	InsecureIgnoreHostKey  bool   // Disable host key verification (INSECURE, not recommended)
-	JumpHost               string // Jump host (bastion) hostname or IP
-	JumpPort               int    // Jump host SSH port (default: 22)
-	JumpUser               string // Jump host SSH user
-	JumpIdentityFile       string // SSH private key for jump host (optional, defaults to IdentityFile)
+	StrictHostKeyChecking  bool          // Enable strict host key checking (default: true)
+	KnownHostsFile         string        // Path to known_hosts file (default: ~/.ssh/known_hosts)
+	InsecureIgnoreHostKey  bool          // Disable host key verification (INSECURE, not recommended)
+	JumpHost               string        // Jump host (bastion) hostname or IP
+	JumpPort               int           // Jump host SSH port (default: 22)
+	JumpUser               string        // Jump host SSH user
+	JumpIdentityFile       string        // SSH private key for jump host (optional, defaults to IdentityFile)
+	RetryConfig            *retry.Config // Retry configuration (nil = no retries)
 }
 
 // ParseTarget parses a target string like "user@host" or "host"
@@ -60,9 +62,22 @@ func NewProvider(config *Config) *Provider {
 	}
 }
 
-// Connect establishes the SSH connection
+// Connect establishes the SSH connection with optional retry logic
 // If a jump host is configured, it will connect through the jump host
 func (p *Provider) Connect(ctx context.Context) error {
+	// If retry config is nil, execute directly without retries
+	if p.config.RetryConfig == nil {
+		return p.connectOnce(ctx)
+	}
+
+	// Wrap connection logic with retry
+	return retry.Do(ctx, p.config.RetryConfig, retry.IsRetryableSSHError, func() error {
+		return p.connectOnce(ctx)
+	})
+}
+
+// connectOnce performs a single connection attempt without retry logic
+func (p *Provider) connectOnce(ctx context.Context) error {
 	// Configure host key verification
 	hostKeyCallback, err := p.getHostKeyCallback()
 	if err != nil {
@@ -231,11 +246,39 @@ func (p *Provider) Close() error {
 	return err
 }
 
-// ExecuteCommand executes a command via SSH and returns stdout, stderr, and exit code
+// ExecuteCommand executes a command via SSH with optional retry logic
 func (p *Provider) ExecuteCommand(ctx context.Context, command string) (stdout, stderr string, exitCode int, err error) {
+	// If retry config is nil, execute directly without retries
+	if p.config.RetryConfig == nil {
+		return p.executeCommandOnce(ctx, command)
+	}
+
+	// Wrap execution with retry logic
+	var stdoutResult, stderrResult string
+	var exitCodeResult int
+
+	retryErr := retry.Do(ctx, p.config.RetryConfig, retry.IsRetryableSSHError, func() error {
+		var execErr error
+		stdoutResult, stderrResult, exitCodeResult, execErr = p.executeCommandOnce(ctx, command)
+		return execErr
+	})
+
+	return stdoutResult, stderrResult, exitCodeResult, retryErr
+}
+
+// executeCommandOnce performs a single command execution attempt with automatic reconnection
+func (p *Provider) executeCommandOnce(ctx context.Context, command string) (stdout, stderr string, exitCode int, err error) {
 	session, err := p.client.NewSession()
 	if err != nil {
-		return "", "", -1, fmt.Errorf("failed to create session: %w", err)
+		// Connection might be dead - try to reconnect once
+		if reconnectErr := p.connectOnce(ctx); reconnectErr != nil {
+			return "", "", -1, fmt.Errorf("failed to reconnect after session error: %w", reconnectErr)
+		}
+		// Retry session creation after reconnect
+		session, err = p.client.NewSession()
+		if err != nil {
+			return "", "", -1, fmt.Errorf("failed to create session after reconnect: %w", err)
+		}
 	}
 	defer session.Close()
 
