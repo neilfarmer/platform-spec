@@ -1,0 +1,417 @@
+networks:
+  custom-test-net:
+    name: custom-test-net
+    driver: bridge
+
+services:
+  runner:
+    image: alpine:latest
+    container_name: custom-test-runner
+    hostname: runner
+    networks:
+      - custom-test-net
+    volumes:
+      - ../dist/platform-spec-linux:/usr/local/bin/platform-spec:ro
+      - ./ssh-test-key:/root/.ssh/id_rsa:ro
+      - ./custom-test-spec.yaml:/spec.yaml:ro
+      - ./custom-test-inventory.txt:/inventory.txt:ro
+    command: ["sleep", "infinity"]
+    depends_on:
+      ssh-jump:
+        condition: service_healthy
+
+  ssh-jump:
+    image: linuxserver/openssh-server:latest
+    container_name: ssh-jump
+    hostname: ssh-jump
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+      - PUBLIC_KEY_FILE=/config/authorized_keys
+      - SUDO_ACCESS=true
+      - PASSWORD_ACCESS=false
+      - USER_NAME=testuser
+    volumes:
+      - ./ssh-test-key.pub:/config/authorized_keys:ro
+    networks:
+      - custom-test-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2222"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    depends_on:
+      ssh-custom-1:
+        condition: service_healthy
+      ssh-custom-2:
+        condition: service_healthy
+      ssh-custom-3:
+        condition: service_healthy
+      ssh-custom-4:
+        condition: service_healthy
+      ssh-custom-5:
+        condition: service_healthy
+      ssh-custom-6:
+        condition: service_healthy
+      ssh-custom-7:
+        condition: service_healthy
+      ssh-custom-8:
+        condition: service_healthy
+      ssh-custom-9:
+        condition: service_healthy
+      ssh-custom-10:
+        condition: service_healthy
+      ssh-custom-11:
+        condition: service_healthy
+      ssh-custom-12:
+        condition: service_healthy
+      ssh-custom-13:
+        condition: service_healthy
+      ssh-custom-14:
+        condition: service_healthy
+      ssh-custom-15:
+        condition: service_healthy
+      ssh-custom-16:
+        condition: service_healthy
+      ssh-custom-17:
+        condition: service_healthy
+      ssh-custom-18:
+        condition: service_healthy
+      ssh-custom-19:
+        condition: service_healthy
+      ssh-custom-20:
+        condition: service_healthy
+      ssh-custom-21:
+        condition: service_healthy
+      ssh-custom-22:
+        condition: service_healthy
+      ssh-custom-23:
+        condition: service_healthy
+      ssh-custom-24:
+        condition: service_healthy
+      ssh-custom-25:
+        condition: service_healthy
+      ssh-custom-26:
+        condition: service_healthy
+      ssh-custom-27:
+        condition: service_healthy
+      ssh-custom-28:
+        condition: service_healthy
+      ssh-custom-29:
+        condition: service_healthy
+      ssh-custom-30:
+        condition: service_healthy
+      ssh-custom-31:
+        condition: service_healthy
+      ssh-custom-32:
+        condition: service_healthy
+      ssh-custom-33:
+        condition: service_healthy
+      ssh-custom-34:
+        condition: service_healthy
+      ssh-custom-35:
+        condition: service_healthy
+      ssh-custom-36:
+        condition: service_healthy
+      ssh-custom-37:
+        condition: service_healthy
+      ssh-custom-38:
+        condition: service_healthy
+      ssh-custom-39:
+        condition: service_healthy
+      ssh-custom-40:
+        condition: service_healthy
+      ssh-custom-41:
+        condition: service_healthy
+      ssh-custom-42:
+        condition: service_healthy
+      ssh-custom-43:
+        condition: service_healthy
+      ssh-custom-44:
+        condition: service_healthy
+      ssh-custom-45:
+        condition: service_healthy
+      ssh-custom-46:
+        condition: service_healthy
+      ssh-custom-47:
+        condition: service_healthy
+      ssh-custom-48:
+        condition: service_healthy
+      ssh-custom-49:
+        condition: service_healthy
+      ssh-custom-50:
+        condition: service_healthy
+
+  ssh-custom-base: &ssh-custom-base
+    image: linuxserver/openssh-server:latest
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+      - PUBLIC_KEY_FILE=/config/authorized_keys
+      - SUDO_ACCESS=true
+      - PASSWORD_ACCESS=false
+      - USER_NAME=testuser
+    volumes:
+      - ./ssh-test-key.pub:/config/authorized_keys:ro
+    networks:
+      - custom-test-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2222"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  ssh-custom-1:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-1
+    hostname: ssh-custom-1
+
+  ssh-custom-2:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-2
+    hostname: ssh-custom-2
+
+  ssh-custom-3:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-3
+    hostname: ssh-custom-3
+
+  ssh-custom-4:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-4
+    hostname: ssh-custom-4
+
+  ssh-custom-5:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-5
+    hostname: ssh-custom-5
+
+  ssh-custom-6:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-6
+    hostname: ssh-custom-6
+
+  ssh-custom-7:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-7
+    hostname: ssh-custom-7
+
+  ssh-custom-8:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-8
+    hostname: ssh-custom-8
+
+  ssh-custom-9:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-9
+    hostname: ssh-custom-9
+
+  ssh-custom-10:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-10
+    hostname: ssh-custom-10
+
+  ssh-custom-11:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-11
+    hostname: ssh-custom-11
+
+  ssh-custom-12:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-12
+    hostname: ssh-custom-12
+
+  ssh-custom-13:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-13
+    hostname: ssh-custom-13
+
+  ssh-custom-14:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-14
+    hostname: ssh-custom-14
+
+  ssh-custom-15:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-15
+    hostname: ssh-custom-15
+
+  ssh-custom-16:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-16
+    hostname: ssh-custom-16
+
+  ssh-custom-17:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-17
+    hostname: ssh-custom-17
+
+  ssh-custom-18:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-18
+    hostname: ssh-custom-18
+
+  ssh-custom-19:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-19
+    hostname: ssh-custom-19
+
+  ssh-custom-20:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-20
+    hostname: ssh-custom-20
+
+  ssh-custom-21:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-21
+    hostname: ssh-custom-21
+
+  ssh-custom-22:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-22
+    hostname: ssh-custom-22
+
+  ssh-custom-23:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-23
+    hostname: ssh-custom-23
+
+  ssh-custom-24:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-24
+    hostname: ssh-custom-24
+
+  ssh-custom-25:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-25
+    hostname: ssh-custom-25
+
+  ssh-custom-26:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-26
+    hostname: ssh-custom-26
+
+  ssh-custom-27:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-27
+    hostname: ssh-custom-27
+
+  ssh-custom-28:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-28
+    hostname: ssh-custom-28
+
+  ssh-custom-29:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-29
+    hostname: ssh-custom-29
+
+  ssh-custom-30:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-30
+    hostname: ssh-custom-30
+
+  ssh-custom-31:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-31
+    hostname: ssh-custom-31
+
+  ssh-custom-32:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-32
+    hostname: ssh-custom-32
+
+  ssh-custom-33:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-33
+    hostname: ssh-custom-33
+
+  ssh-custom-34:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-34
+    hostname: ssh-custom-34
+
+  ssh-custom-35:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-35
+    hostname: ssh-custom-35
+
+  ssh-custom-36:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-36
+    hostname: ssh-custom-36
+
+  ssh-custom-37:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-37
+    hostname: ssh-custom-37
+
+  ssh-custom-38:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-38
+    hostname: ssh-custom-38
+
+  ssh-custom-39:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-39
+    hostname: ssh-custom-39
+
+  ssh-custom-40:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-40
+    hostname: ssh-custom-40
+
+  ssh-custom-41:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-41
+    hostname: ssh-custom-41
+
+  ssh-custom-42:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-42
+    hostname: ssh-custom-42
+
+  ssh-custom-43:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-43
+    hostname: ssh-custom-43
+
+  ssh-custom-44:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-44
+    hostname: ssh-custom-44
+
+  ssh-custom-45:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-45
+    hostname: ssh-custom-45
+
+  ssh-custom-46:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-46
+    hostname: ssh-custom-46
+
+  ssh-custom-47:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-47
+    hostname: ssh-custom-47
+
+  ssh-custom-48:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-48
+    hostname: ssh-custom-48
+
+  ssh-custom-49:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-49
+    hostname: ssh-custom-49
+
+  ssh-custom-50:
+    <<: *ssh-custom-base
+    container_name: ssh-custom-50
+    hostname: ssh-custom-50
+

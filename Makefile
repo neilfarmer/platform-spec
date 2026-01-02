@@ -1,4 +1,4 @@
-.PHONY: build clean test install release-build deploy-kind-cluster destroy-kind-cluster security-scan security-scan-vuln security-scan-static test-docker test-docker-local test-kubernetes test-integration test-inventory test-integration-imports test-bad-inventory test-jump destroy-test-jump test-parallel-performance
+.PHONY: build clean test install release-build deploy-kind-cluster destroy-kind-cluster security-scan security-scan-vuln security-scan-static test-docker test-docker-local test-kubernetes test-integration test-inventory test-integration-imports test-bad-inventory test-jump destroy-test-jump test-parallel-performance custom-test
 
 # Cluster name for kind
 KIND_CLUSTER_NAME ?= platform-spec-test
@@ -229,3 +229,18 @@ test-parallel-performance: build
 	@echo "Note: First run will download Docker images (~3 minutes)"
 	@echo ""
 	@cd integration && ./test-parallel.sh
+
+# Custom integration test - 50 containers via jump host with 30 tests each
+custom-test: build
+	@echo "=== Running Custom Integration Test ==="
+	@echo ""
+	@echo "This will:"
+	@echo "  - Spin up 1 jump host + 50 SSH target containers"
+	@echo "  - Route all connections: localhost --> jump --> targets"
+	@echo "  - Run 30 comprehensive tests on each container (1500 total)"
+	@echo "  - Test sequential and parallel execution (10, 25, 50 workers)"
+	@echo "  - Show performance speedup comparisons"
+	@echo ""
+	@echo "Note: First run will download Docker images (~3 minutes)"
+	@echo ""
+	@cd integration && ./test-custom.sh

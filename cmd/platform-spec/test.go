@@ -17,6 +17,7 @@ import (
 	"github.com/neilfarmer/platform-spec/pkg/providers/kubernetes"
 	"github.com/neilfarmer/platform-spec/pkg/providers/local"
 	"github.com/neilfarmer/platform-spec/pkg/providers/remote"
+	"github.com/neilfarmer/platform-spec/pkg/retry"
 	"github.com/spf13/cobra"
 )
 
@@ -48,6 +49,12 @@ var (
 	parallel    string
 	maxParallel int
 	failFast    bool
+
+	// Retry flags
+	retries       int
+	retryDelay    string
+	retryBackoff  string
+	retryMaxDelay string
 )
 
 var testCmd = &cobra.Command{
@@ -112,6 +119,12 @@ func init() {
 	remoteCmd.Flags().IntVar(&jumpPort, "jump-port", 22, "Jump host SSH port (default: 22)")
 	remoteCmd.Flags().StringVar(&jumpUser, "jump-user", "", "Jump host SSH user (overrides user from --jump-host)")
 	remoteCmd.Flags().StringVar(&jumpIdentityFile, "jump-identity", "", "SSH private key for jump host (defaults to --identity if not specified)")
+
+	// Retry flags
+	remoteCmd.Flags().IntVar(&retries, "retries", 3, "Number of retry attempts for transient failures (0 = no retries)")
+	remoteCmd.Flags().StringVar(&retryDelay, "retry-delay", "1s", "Initial delay between retry attempts (e.g., 1s, 500ms)")
+	remoteCmd.Flags().StringVar(&retryBackoff, "retry-backoff", "linear", "Retry backoff strategy: linear, exponential, jittered")
+	remoteCmd.Flags().StringVar(&retryMaxDelay, "retry-max-delay", "30s", "Maximum delay between retry attempts")
 
 	// Output flags (shared across all test commands)
 	remoteCmd.Flags().StringVarP(&outputFormat, "output", "o", "human", "Output format (human, json, junit)")
@@ -336,6 +349,42 @@ func runRemoteTest(cmd *cobra.Command, args []string) {
 		fmt.Printf("\n")
 	}
 
+	// Parse retry configuration
+	var retryConfig *retry.Config
+	if retries > 0 {
+		initialDelay, err := time.ParseDuration(retryDelay)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Invalid --retry-delay: %v\n", err)
+			os.Exit(1)
+		}
+
+		maxDelay, err := time.ParseDuration(retryMaxDelay)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Invalid --retry-max-delay: %v\n", err)
+			os.Exit(1)
+		}
+
+		var strategy retry.Strategy
+		switch retryBackoff {
+		case "linear":
+			strategy = retry.StrategyLinear
+		case "exponential":
+			strategy = retry.StrategyExponential
+		case "jittered":
+			strategy = retry.StrategyJittered
+		default:
+			fmt.Fprintf(os.Stderr, "Invalid --retry-backoff: %s (must be linear, exponential, or jittered)\n", retryBackoff)
+			os.Exit(1)
+		}
+
+		retryConfig = &retry.Config{
+			MaxRetries:   retries,
+			InitialDelay: initialDelay,
+			MaxDelay:     maxDelay,
+			Strategy:     strategy,
+		}
+	}
+
 	// Display security warning once if using insecure mode
 	if insecureIgnoreHostKey && len(hosts) > 0 {
 		if len(hosts) == 1 {
@@ -370,6 +419,7 @@ func runRemoteTest(cmd *cobra.Command, args []string) {
 			JumpPort:              jumpPort,
 			JumpUser:              parsedJumpUser,
 			JumpIdentityFile:      jumpIdentityFile,
+			RetryConfig:           retryConfig,
 		}
 
 		jobs = append(jobs, core.HostJob{

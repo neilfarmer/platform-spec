@@ -1,0 +1,106 @@
+version: "1.0"
+
+metadata:
+  name: "Custom Integration Test - 30 Tests"
+  description: "Comprehensive test spec for Alpine Linux containers"
+
+tests:
+  packages:
+    - name: "bash package installed"
+      packages: [bash]
+      state: present
+    - name: "curl package installed"
+      packages: [curl]
+      state: present
+    - name: "openssh-server package installed"
+      packages: [openssh-server-common]
+      state: present
+    - name: "busybox package installed"
+      packages: [busybox]
+      state: present
+    - name: "shadow package installed"
+      packages: [shadow]
+      state: present
+
+  files:
+    - name: "/tmp directory exists"
+      path: /tmp
+      type: directory
+    - name: "/etc directory exists"
+      path: /etc
+      type: directory
+    - name: "/etc/passwd file exists"
+      path: /etc/passwd
+      type: file
+    - name: "/etc/group file exists"
+      path: /etc/group
+      type: file
+    - name: "/usr/bin directory exists"
+      path: /usr/bin
+      type: directory
+    - name: "/home directory exists"
+      path: /home
+      type: directory
+    - name: "/var directory exists"
+      path: /var
+      type: directory
+    - name: "/proc directory exists"
+      path: /proc
+      type: directory
+
+  users:
+    - name: "root user exists"
+      user: root
+      uid: 0
+    - name: "testuser exists"
+      user: testuser
+    - name: "root has shell"
+      user: root
+      shell: /bin/sh
+    - name: "testuser has shell"
+      user: testuser
+      shell: /bin/bash
+
+  groups:
+    - name: "root group exists"
+      groups: [root]
+    - name: "users group exists"
+      groups: [users]
+    - name: "wheel group exists"
+      groups: [wheel]
+
+  file_content:
+    - name: "/etc/passwd contains root"
+      path: /etc/passwd
+      contains: ["root"]
+    - name: "/etc/os-release contains Alpine"
+      path: /etc/os-release
+      contains: ["Alpine"]
+    - name: "/etc/group contains root"
+      path: /etc/group
+      contains: ["root"]
+    - name: "/etc/passwd contains testuser"
+      path: /etc/passwd
+      contains: ["testuser"]
+
+  command_content:
+    - name: "hostname command works"
+      command: "hostname"
+      contains: ["ssh-custom"]
+    - name: "whoami returns testuser"
+      command: "whoami"
+      contains: ["testuser"]
+    - name: "echo test works"
+      command: "echo 'platform-spec-test'"
+      contains: ["platform-spec-test"]
+    - name: "date command works"
+      command: "date"
+      contains: ["202"]
+
+  ping:
+    - name: "Localhost is reachable"
+      host: localhost
+
+  dns:
+    - name: "localhost resolves"
+      host: localhost

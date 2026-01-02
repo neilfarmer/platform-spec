@@ -144,6 +144,7 @@ echo ""
 echo "=== Cleanup ==="
 echo "Stopping containers with docker-compose..."
 docker-compose -f docker-compose-demo.yml down -v 2>/dev/null || true
+rm -f ssh-key ssh-key.pub inventory-demo.txt spec-demo.yaml
 
 echo ""
 echo "✅ Demo completed!"
