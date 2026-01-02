@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/neilfarmer/platform-spec/compare/v0.9.0...v0.10.0) (2026-01-02)
+
+
+### Features
+
+* Add retry logic for remote provider ([dd2f882](https://github.com/neilfarmer/platform-spec/commit/dd2f882acb8e16b7c43fda75b5b56494ad432cdc))
+
 ## [0.9.0](https://github.com/neilfarmer/platform-spec/compare/v0.8.0...v0.9.0) (2026-01-01)
 
 
