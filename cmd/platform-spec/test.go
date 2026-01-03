@@ -55,6 +55,9 @@ var (
 	retryDelay    string
 	retryBackoff  string
 	retryMaxDelay string
+
+	// Exit code control
+	ignoreFailure bool
 )
 
 var testCmd = &cobra.Command{
@@ -130,6 +133,7 @@ func init() {
 	remoteCmd.Flags().StringVarP(&outputFormat, "output", "o", "human", "Output format (human, json, junit)")
 	remoteCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Verbose output")
 	remoteCmd.Flags().BoolVar(&noColor, "no-color", false, "Disable colored output")
+	remoteCmd.Flags().BoolVar(&ignoreFailure, "ignore-failure", false, "Exit with code 0 even if tests fail")
 
 	// Parallel execution flags
 	remoteCmd.Flags().StringVar(&parallel, "parallel", "1", "Number of concurrent workers (integer or 'auto' for auto-detect)")
@@ -140,6 +144,7 @@ func init() {
 	localCmd.Flags().StringVarP(&outputFormat, "output", "o", "human", "Output format (human, json, junit)")
 	localCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Verbose output")
 	localCmd.Flags().BoolVar(&noColor, "no-color", false, "Disable colored output")
+	localCmd.Flags().BoolVar(&ignoreFailure, "ignore-failure", false, "Exit with code 0 even if tests fail")
 
 	// Kubernetes command flags
 	kubernetesCmd.Flags().StringVar(&kubeconfig, "kubeconfig", "", "Path to kubeconfig file (default: ~/.kube/config)")
@@ -148,6 +153,7 @@ func init() {
 	kubernetesCmd.Flags().StringVarP(&outputFormat, "output", "o", "human", "Output format (human, json, junit)")
 	kubernetesCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Verbose output")
 	kubernetesCmd.Flags().BoolVar(&noColor, "no-color", false, "Disable colored output")
+	kubernetesCmd.Flags().BoolVar(&ignoreFailure, "ignore-failure", false, "Exit with code 0 even if tests fail")
 
 	// Add subcommands to test
 	testCmd.AddCommand(remoteCmd)
@@ -540,8 +546,8 @@ func runRemoteTest(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	// Exit with error code if any tests failed
-	if !multiResults.Success() {
+	// Exit with error code if any tests failed (unless --ignore-failure is set)
+	if !multiResults.Success() && !ignoreFailure {
 		os.Exit(1)
 	}
 }
@@ -602,10 +608,12 @@ func runLocalTest(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	// Exit with error code if any tests failed
-	for _, results := range allResults {
-		if !results.Success() {
-			os.Exit(1)
+	// Exit with error code if any tests failed (unless --ignore-failure is set)
+	if !ignoreFailure {
+		for _, results := range allResults {
+			if !results.Success() {
+				os.Exit(1)
+			}
 		}
 	}
 }
@@ -699,10 +707,12 @@ func runKubernetesTest(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	// Exit with error code if any tests failed
-	for _, results := range allResults {
-		if !results.Success() {
-			os.Exit(1)
+	// Exit with error code if any tests failed (unless --ignore-failure is set)
+	if !ignoreFailure {
+		for _, results := range allResults {
+			if !results.Success() {
+				os.Exit(1)
+			}
 		}
 	}
 }
