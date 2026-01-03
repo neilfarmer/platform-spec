@@ -190,10 +190,11 @@ func parseParallelFlag(parallelStr string, maxParallel int) (int, error) {
 }
 
 // testSingleHost tests a single host with the given specs
-func testSingleHost(ctx context.Context, host, user string, specs []*core.Spec, config *remote.Config) (*core.HostResults, error) {
+func testSingleHost(ctx context.Context, host, user string, specs []*core.Spec, config *remote.Config, isMultiHost bool) (*core.HostResults, error) {
 	startTime := time.Now()
+	target := fmt.Sprintf("%s@%s", user, host)
 	hostResults := &core.HostResults{
-		Target:    fmt.Sprintf("%s@%s", user, host),
+		Target:    target,
 		Connected: false,
 	}
 
@@ -204,6 +205,14 @@ func testSingleHost(ctx context.Context, host, user string, specs []*core.Spec, 
 	if err := remoteProvider.Connect(ctx); err != nil {
 		hostResults.ConnectionError = err
 		hostResults.Duration = time.Since(startTime)
+
+		// Show connection error immediately
+		if isMultiHost {
+			fmt.Printf("%s: %s\n",
+				output.ApplyColorExport(output.ColorBold, target),
+				output.ApplyColorExport(output.ColorRed, "✗ Connection failed: "+err.Error()))
+		}
+
 		return hostResults, err
 	}
 	defer remoteProvider.Close()
@@ -211,19 +220,31 @@ func testSingleHost(ctx context.Context, host, user string, specs []*core.Spec, 
 	hostResults.Connected = true
 
 	if verbose {
-		fmt.Printf("Connected to %s@%s\n\n", user, host)
+		fmt.Printf("Connected to %s\n", target)
 	}
 
 	// Execute tests for each spec file
 	for _, spec := range specs {
 		// Execute tests with plugins
 		executor := core.NewExecutor(spec, remoteProvider, system.NewSystemPlugin(), k8splugin.NewKubernetesPlugin())
+
+		// Set callback for real-time streaming output with hostname prefix
+		if isMultiHost {
+			// For multi-host, prefix each result with hostname
+			executor.SetResultCallback(func(result core.Result) {
+				output.FormatSingleResultWithHost(result, target)
+			})
+		} else {
+			// For single-host, no prefix needed
+			executor.SetResultCallback(output.FormatSingleResult)
+		}
+
 		results, err := executor.Execute(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to execute tests: %w", err)
 		}
 
-		results.Target = fmt.Sprintf("%s@%s", user, host)
+		results.Target = target
 		hostResults.SpecResults = append(hostResults.SpecResults, results)
 	}
 
@@ -429,10 +450,13 @@ func runRemoteTest(cmd *cobra.Command, args []string) {
 		})
 	}
 
+	// Determine if we're in multi-host mode
+	isMultiHost := len(hosts) > 1
+
 	// Create test function wrapper
 	testFunc := func(ctx context.Context, job core.HostJob) (*core.HostResults, error) {
 		config := job.Config.(*remote.Config)
-		return testSingleHost(ctx, config.Host, config.User, specs, config)
+		return testSingleHost(ctx, config.Host, config.User, specs, config, isMultiHost)
 	}
 
 	// Execute tests (sequential or parallel based on workers)
@@ -505,14 +529,14 @@ func runRemoteTest(cmd *cobra.Command, args []string) {
 			}
 		}
 	} else {
-		// Multi-host mode: use multi-host output format
+		// Multi-host mode: just show final summary table (results already streamed)
 		switch outputFormat {
 		case "json":
 			fmt.Println("JSON output not yet implemented for multi-host")
 		case "junit":
 			fmt.Println("JUnit output not yet implemented for multi-host")
 		default:
-			fmt.Print(output.FormatMultiHostHuman(multiResults))
+			fmt.Print(output.FormatMultiHostSummaryTable(multiResults))
 		}
 	}
 
@@ -551,6 +575,10 @@ func runLocalTest(cmd *cobra.Command, args []string) {
 
 		// Execute tests with plugins
 		executor := core.NewExecutor(spec, localProvider, system.NewSystemPlugin(), k8splugin.NewKubernetesPlugin())
+
+		// Set callback for real-time streaming output
+		executor.SetResultCallback(output.FormatSingleResult)
+
 		results, err := executor.Execute(ctx)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to execute tests: %v\n", err)
@@ -640,6 +668,10 @@ func runKubernetesTest(cmd *cobra.Command, args []string) {
 
 		// Execute tests with plugins
 		executor := core.NewExecutor(spec, k8sProvider, system.NewSystemPlugin(), k8splugin.NewKubernetesPlugin())
+
+		// Set callback for real-time streaming output
+		executor.SetResultCallback(output.FormatSingleResult)
+
 		results, err := executor.Execute(ctx)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to execute tests: %v\n", err)
