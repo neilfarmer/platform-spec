@@ -92,7 +92,7 @@ func TestKubernetesPlugin_Execute(t *testing.T) {
 	plugin := NewKubernetesPlugin()
 	ctx := context.Background()
 
-	results, shouldStop := plugin.Execute(ctx, spec, mock, false)
+	results, shouldStop := plugin.Execute(ctx, spec, mock, false, nil)
 
 	if len(results) != 13 {
 		t.Errorf("Expected 13 results, got %d", len(results))
@@ -130,7 +130,7 @@ func TestKubernetesPlugin_Execute_FailFast(t *testing.T) {
 	plugin := NewKubernetesPlugin()
 	ctx := context.Background()
 
-	results, shouldStop := plugin.Execute(ctx, spec, mock, true)
+	results, shouldStop := plugin.Execute(ctx, spec, mock, true, nil)
 
 	if len(results) != 1 {
 		t.Errorf("Expected 1 result (fail fast), got %d", len(results))

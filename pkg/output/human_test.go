@@ -35,13 +35,9 @@ func TestFormatHuman(t *testing.T) {
 				},
 			},
 			contains: []string{
-				"Platform-Spec Test Results",
-				"Spec: Test Suite",
-				"Target: ubuntu@host",
-				"✓ Test 1",
-				"✓ Test 2",
-				"2 passed, 0 failed",
-				"PASSED",
+				"Summary:",
+				"2 passed",
+				"1.00s",
 			},
 		},
 		{
@@ -69,12 +65,10 @@ func TestFormatHuman(t *testing.T) {
 				},
 			},
 			contains: []string{
-				"✓ Test 1",
-				"✗ Test 2",
-				"Test failed",
-				"○ Test 3",
-				"1 passed, 1 failed, 1 skipped",
-				"FAILED",
+				"Summary:",
+				"1 passed, 1 failed",
+				"1 skipped",
+				"1.00s",
 			},
 		},
 		{
@@ -91,10 +85,9 @@ func TestFormatHuman(t *testing.T) {
 				},
 			},
 			contains: []string{
-				"⚠ Test 1",
-				"Error occurred",
-				"0 passed, 0 failed, 0 skipped, 1 errors",
-				"FAILED",
+				"Summary:",
+				"0 passed, 1 failed",
+				"0.50s",
 			},
 		},
 	}
@@ -237,10 +230,10 @@ func TestFormatHumanWithColors(t *testing.T) {
 				},
 			},
 			wantContains: []string{
-				colorGreen,     // Green color code
-				colorReset,     // Reset code
-				"✅ PASSED",    // Emoji status
-				colorBold,      // Bold for status
+				colorGreen,  // Green color code
+				colorReset,  // Reset code
+				colorBold,   // Bold for "Summary:"
+				"1 passed",  // Summary text
 			},
 			wantNotContains: []string{},
 		},
@@ -254,15 +247,15 @@ func TestFormatHumanWithColors(t *testing.T) {
 				},
 			},
 			wantContains: []string{
-				colorRed,    // Red color code
-				colorReset,  // Reset code
-				"❌ FAILED", // Emoji status
-				colorBold,   // Bold for status
+				colorRed,         // Red color code
+				colorReset,       // Reset code
+				colorBold,        // Bold for "Summary:"
+				"0 passed, 1 failed", // Summary text
 			},
 			wantNotContains: []string{},
 		},
 		{
-			name:    "colors disabled - no ANSI codes but emojis remain",
+			name:    "colors disabled - no ANSI codes",
 			noColor: true,
 			results: &core.TestResults{
 				Duration: 1 * time.Second,
@@ -271,8 +264,8 @@ func TestFormatHumanWithColors(t *testing.T) {
 				},
 			},
 			wantContains: []string{
-				"✅ PASSED", // Emoji status remains
-				"✓ Test 1",  // Symbol remains
+				"Summary:",  // Summary text remains
+				"1 passed",  // Summary text
 			},
 			wantNotContains: []string{
 				"\033[",     // No ANSI escape codes
@@ -291,8 +284,8 @@ func TestFormatHumanWithColors(t *testing.T) {
 				},
 			},
 			wantContains: []string{
-				"❌ FAILED", // Emoji status remains
-				"✗ Test 1",  // Symbol remains
+				"Summary:",           // Summary text remains
+				"0 passed, 1 failed", // Summary text
 			},
 			wantNotContains: []string{
 				"\033[",    // No ANSI escape codes
@@ -860,6 +853,171 @@ func TestFormatMultiHostHuman_TableOutput(t *testing.T) {
 			for _, want := range tt.wantContains {
 				if !strings.Contains(output, want) {
 					t.Errorf("FormatMultiHostHuman() output missing %q\nGot:\n%s", want, output)
+				}
+			}
+		})
+	}
+}
+
+func TestFormatMultiHostSummaryTable(t *testing.T) {
+	tests := []struct {
+		name         string
+		results      *core.MultiHostResults
+		wantContains []string
+	}{
+		{
+			name: "all hosts passed",
+			results: &core.MultiHostResults{
+				TotalDuration: 5 * time.Second,
+				Hosts: []*core.HostResults{
+					{
+						Target:    "web-01.example.com",
+						Connected: true,
+						SpecResults: []*core.TestResults{
+							{Results: []core.Result{
+								{Name: "Test 1", Status: core.StatusPass},
+								{Name: "Test 2", Status: core.StatusPass},
+								{Name: "Test 3", Status: core.StatusPass},
+							}},
+						},
+					},
+					{
+						Target:    "web-02.example.com",
+						Connected: true,
+						SpecResults: []*core.TestResults{
+							{Results: []core.Result{
+								{Name: "Test 1", Status: core.StatusPass},
+								{Name: "Test 2", Status: core.StatusPass},
+							}},
+						},
+					},
+				},
+			},
+			wantContains: []string{
+				"Summary:",
+				"2/2 hosts passed",
+				"5.00s",
+				"web-01.example.com",
+				"web-02.example.com",
+				"PASSED",
+				"All 3 tests passed",
+				"All 2 tests passed",
+				"+",
+				"|",
+				"-",
+			},
+		},
+		{
+			name: "mixed results with failures",
+			results: &core.MultiHostResults{
+				TotalDuration: 10 * time.Second,
+				Hosts: []*core.HostResults{
+					{
+						Target:    "web-01.example.com",
+						Connected: true,
+						SpecResults: []*core.TestResults{
+							{Results: []core.Result{
+								{Name: "Test 1", Status: core.StatusPass},
+								{Name: "Test 2", Status: core.StatusFail},
+								{Name: "Test 3", Status: core.StatusPass},
+							}},
+						},
+					},
+					{
+						Target:    "web-02.example.com",
+						Connected: true,
+						SpecResults: []*core.TestResults{
+							{Results: []core.Result{
+								{Name: "Test 1", Status: core.StatusPass},
+								{Name: "Test 2", Status: core.StatusPass},
+							}},
+						},
+					},
+				},
+			},
+			wantContains: []string{
+				"Summary:",
+				"1 passed, 1 failed",
+				"10.00s",
+				"web-01.example.com",
+				"FAILED",
+				"2 passed, 1 failed",
+				"• Test 2",
+				"web-02.example.com",
+				"PASSED",
+			},
+		},
+		{
+			name: "connection errors",
+			results: &core.MultiHostResults{
+				TotalDuration: 2 * time.Second,
+				Hosts: []*core.HostResults{
+					{
+						Target:          "web-01.example.com",
+						Connected:       false,
+						ConnectionError: fmt.Errorf("connection refused"),
+					},
+					{
+						Target:    "web-02.example.com",
+						Connected: true,
+						SpecResults: []*core.TestResults{
+							{Results: []core.Result{
+								{Name: "Test 1", Status: core.StatusPass},
+							}},
+						},
+					},
+				},
+			},
+			wantContains: []string{
+				"Summary:",
+				"1 passed, 1 failed",
+				"2.00s",
+				"web-01.example.com",
+				"FAILED",
+				"• Unable to connect via SSH",
+				"web-02.example.com",
+				"PASSED",
+			},
+		},
+		{
+			name: "multiple failed tests shown as bullets",
+			results: &core.MultiHostResults{
+				TotalDuration: 3 * time.Second,
+				Hosts: []*core.HostResults{
+					{
+						Target:    "web-01.example.com",
+						Connected: true,
+						SpecResults: []*core.TestResults{
+							{Results: []core.Result{
+								{Name: "Package test", Status: core.StatusFail},
+								{Name: "File test", Status: core.StatusFail},
+								{Name: "Service test", Status: core.StatusError},
+								{Name: "User test", Status: core.StatusPass},
+							}},
+						},
+					},
+				},
+			},
+			wantContains: []string{
+				"Summary:",
+				"0 passed, 1 failed",
+				"web-01.example.com",
+				"FAILED",
+				"1 passed, 3 failed",
+				"• Package test",
+				"• File test",
+				"• Service test",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			output := FormatMultiHostSummaryTable(tt.results)
+
+			for _, want := range tt.wantContains {
+				if !strings.Contains(output, want) {
+					t.Errorf("FormatMultiHostSummaryTable() output missing %q\nGot:\n%s", want, output)
 				}
 			}
 		})

@@ -72,7 +72,7 @@ func TestSystemPlugin_Execute(t *testing.T) {
 	plugin := NewSystemPlugin()
 	ctx := context.Background()
 
-	results, shouldStop := plugin.Execute(ctx, spec, mock, false)
+	results, shouldStop := plugin.Execute(ctx, spec, mock, false, nil)
 
 	if len(results) != 14 {
 		t.Errorf("Expected 14 results, got %d", len(results))
@@ -108,7 +108,7 @@ func TestSystemPlugin_Execute_FailFast(t *testing.T) {
 	plugin := NewSystemPlugin()
 	ctx := context.Background()
 
-	results, shouldStop := plugin.Execute(ctx, spec, mock, true)
+	results, shouldStop := plugin.Execute(ctx, spec, mock, true, nil)
 
 	if len(results) != 1 {
 		t.Errorf("Expected 1 result (fail fast), got %d", len(results))
