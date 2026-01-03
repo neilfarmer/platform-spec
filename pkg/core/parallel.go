@@ -2,8 +2,6 @@ package core
 
 import (
 	"context"
-	"fmt"
-	"os"
 	"sync"
 	"time"
 )
@@ -137,21 +135,8 @@ func (pe *ParallelExecutor) collectResults(done chan struct{}) {
 			pe.progress.failedHosts++
 		}
 
-		// Print progress (if not in verbose mode)
-		if !pe.verbose {
-			pe.printProgress()
-		}
+		// Progress output disabled - test results stream in real-time instead
+		// This prevents progress messages from interleaving with test output
 		pe.mu.Unlock()
 	}
-}
-
-// printProgress displays current progress using carriage return
-func (pe *ParallelExecutor) printProgress() {
-	fmt.Fprintf(os.Stderr, "\rTesting hosts: %d/%d completed (%d passed, %d failed, %d conn errors)",
-		pe.progress.completedHosts,
-		pe.progress.totalHosts,
-		pe.progress.completedHosts-pe.progress.failedHosts,
-		pe.progress.failedHosts,
-		pe.progress.connErrors,
-	)
 }

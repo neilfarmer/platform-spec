@@ -15,7 +15,7 @@ func NewSystemPlugin() *SystemPlugin {
 }
 
 // Execute runs all system-level tests
-func (p *SystemPlugin) Execute(ctx context.Context, spec *core.Spec, provider core.Provider, failFast bool) ([]core.Result, bool) {
+func (p *SystemPlugin) Execute(ctx context.Context, spec *core.Spec, provider core.Provider, failFast bool, callback core.ResultCallback) ([]core.Result, bool) {
 	var results []core.Result
 	shouldStop := false
 
@@ -23,6 +23,9 @@ func (p *SystemPlugin) Execute(ctx context.Context, spec *core.Spec, provider co
 	for _, test := range spec.Tests.Packages {
 		result := executePackageTest(ctx, provider, test)
 		results = append(results, result)
+		if callback != nil {
+			callback(result)
+		}
 		if failFast && result.Status == core.StatusFail {
 			return results, true
 		}
@@ -32,6 +35,9 @@ func (p *SystemPlugin) Execute(ctx context.Context, spec *core.Spec, provider co
 	for _, test := range spec.Tests.Files {
 		result := executeFileTest(ctx, provider, test)
 		results = append(results, result)
+		if callback != nil {
+			callback(result)
+		}
 		if failFast && result.Status == core.StatusFail {
 			return results, true
 		}
@@ -41,6 +47,9 @@ func (p *SystemPlugin) Execute(ctx context.Context, spec *core.Spec, provider co
 	for _, test := range spec.Tests.Services {
 		result := executeServiceTest(ctx, provider, test)
 		results = append(results, result)
+		if callback != nil {
+			callback(result)
+		}
 		if failFast && result.Status == core.StatusFail {
 			return results, true
 		}
@@ -50,6 +59,9 @@ func (p *SystemPlugin) Execute(ctx context.Context, spec *core.Spec, provider co
 	for _, test := range spec.Tests.Users {
 		result := executeUserTest(ctx, provider, test)
 		results = append(results, result)
+		if callback != nil {
+			callback(result)
+		}
 		if failFast && result.Status == core.StatusFail {
 			return results, true
 		}
@@ -59,6 +71,9 @@ func (p *SystemPlugin) Execute(ctx context.Context, spec *core.Spec, provider co
 	for _, test := range spec.Tests.Groups {
 		result := executeGroupTest(ctx, provider, test)
 		results = append(results, result)
+		if callback != nil {
+			callback(result)
+		}
 		if failFast && result.Status == core.StatusFail {
 			return results, true
 		}
@@ -68,6 +83,9 @@ func (p *SystemPlugin) Execute(ctx context.Context, spec *core.Spec, provider co
 	for _, test := range spec.Tests.FileContent {
 		result := executeFileContentTest(ctx, provider, test)
 		results = append(results, result)
+		if callback != nil {
+			callback(result)
+		}
 		if failFast && result.Status == core.StatusFail {
 			return results, true
 		}
@@ -77,6 +95,9 @@ func (p *SystemPlugin) Execute(ctx context.Context, spec *core.Spec, provider co
 	for _, test := range spec.Tests.CommandContent {
 		result := executeCommandContentTest(ctx, provider, test)
 		results = append(results, result)
+		if callback != nil {
+			callback(result)
+		}
 		if failFast && result.Status == core.StatusFail {
 			return results, true
 		}
@@ -86,6 +107,9 @@ func (p *SystemPlugin) Execute(ctx context.Context, spec *core.Spec, provider co
 	for _, test := range spec.Tests.Docker {
 		result := executeDockerTest(ctx, provider, test)
 		results = append(results, result)
+		if callback != nil {
+			callback(result)
+		}
 		if failFast && result.Status == core.StatusFail {
 			return results, true
 		}
@@ -95,6 +119,9 @@ func (p *SystemPlugin) Execute(ctx context.Context, spec *core.Spec, provider co
 	for _, test := range spec.Tests.Filesystems {
 		result := executeFilesystemTest(ctx, provider, test)
 		results = append(results, result)
+		if callback != nil {
+			callback(result)
+		}
 		if failFast && result.Status == core.StatusFail {
 			return results, true
 		}
@@ -104,6 +131,9 @@ func (p *SystemPlugin) Execute(ctx context.Context, spec *core.Spec, provider co
 	for _, test := range spec.Tests.Ping {
 		result := executePingTest(ctx, provider, test)
 		results = append(results, result)
+		if callback != nil {
+			callback(result)
+		}
 		if failFast && result.Status == core.StatusFail {
 			return results, true
 		}
@@ -113,6 +143,9 @@ func (p *SystemPlugin) Execute(ctx context.Context, spec *core.Spec, provider co
 	for _, test := range spec.Tests.DNS {
 		result := executeDNSTest(ctx, provider, test)
 		results = append(results, result)
+		if callback != nil {
+			callback(result)
+		}
 		if failFast && result.Status == core.StatusFail {
 			return results, true
 		}
@@ -122,6 +155,9 @@ func (p *SystemPlugin) Execute(ctx context.Context, spec *core.Spec, provider co
 	for _, test := range spec.Tests.SystemInfo {
 		result := executeSystemInfoTest(ctx, provider, test)
 		results = append(results, result)
+		if callback != nil {
+			callback(result)
+		}
 		if failFast && result.Status == core.StatusFail {
 			return results, true
 		}
@@ -131,6 +167,9 @@ func (p *SystemPlugin) Execute(ctx context.Context, spec *core.Spec, provider co
 	for _, test := range spec.Tests.HTTP {
 		result := executeHTTPTest(ctx, provider, test)
 		results = append(results, result)
+		if callback != nil {
+			callback(result)
+		}
 		if failFast && result.Status == core.StatusFail {
 			return results, true
 		}
@@ -140,6 +179,9 @@ func (p *SystemPlugin) Execute(ctx context.Context, spec *core.Spec, provider co
 	for _, test := range spec.Tests.Ports {
 		result := executePortTest(ctx, provider, test)
 		results = append(results, result)
+		if callback != nil {
+			callback(result)
+		}
 		if failFast && result.Status == core.StatusFail {
 			return results, true
 		}

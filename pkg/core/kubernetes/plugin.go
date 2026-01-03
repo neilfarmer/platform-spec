@@ -15,13 +15,16 @@ func NewKubernetesPlugin() *KubernetesPlugin {
 }
 
 // Execute runs all Kubernetes tests
-func (p *KubernetesPlugin) Execute(ctx context.Context, spec *core.Spec, provider core.Provider, failFast bool) ([]core.Result, bool) {
+func (p *KubernetesPlugin) Execute(ctx context.Context, spec *core.Spec, provider core.Provider, failFast bool, callback core.ResultCallback) ([]core.Result, bool) {
 	var results []core.Result
 
 	// Execute namespace tests
 	for _, test := range spec.Tests.Kubernetes.Namespaces {
 		result := executeKubernetesNamespaceTest(ctx, provider, test)
 		results = append(results, result)
+		if callback != nil {
+			callback(result)
+		}
 		if failFast && result.Status == core.StatusFail {
 			return results, true
 		}
@@ -31,6 +34,9 @@ func (p *KubernetesPlugin) Execute(ctx context.Context, spec *core.Spec, provide
 	for _, test := range spec.Tests.Kubernetes.Pods {
 		result := executeKubernetesPodTest(ctx, provider, test)
 		results = append(results, result)
+		if callback != nil {
+			callback(result)
+		}
 		if failFast && result.Status == core.StatusFail {
 			return results, true
 		}
@@ -40,6 +46,9 @@ func (p *KubernetesPlugin) Execute(ctx context.Context, spec *core.Spec, provide
 	for _, test := range spec.Tests.Kubernetes.Deployments {
 		result := executeKubernetesDeploymentTest(ctx, provider, test)
 		results = append(results, result)
+		if callback != nil {
+			callback(result)
+		}
 		if failFast && result.Status == core.StatusFail {
 			return results, true
 		}
@@ -49,6 +58,9 @@ func (p *KubernetesPlugin) Execute(ctx context.Context, spec *core.Spec, provide
 	for _, test := range spec.Tests.Kubernetes.Services {
 		result := executeKubernetesServiceTest(ctx, provider, test)
 		results = append(results, result)
+		if callback != nil {
+			callback(result)
+		}
 		if failFast && result.Status == core.StatusFail {
 			return results, true
 		}
@@ -58,6 +70,9 @@ func (p *KubernetesPlugin) Execute(ctx context.Context, spec *core.Spec, provide
 	for _, test := range spec.Tests.Kubernetes.ConfigMaps {
 		result := executeKubernetesConfigMapTest(ctx, provider, test)
 		results = append(results, result)
+		if callback != nil {
+			callback(result)
+		}
 		if failFast && result.Status == core.StatusFail {
 			return results, true
 		}
@@ -67,6 +82,9 @@ func (p *KubernetesPlugin) Execute(ctx context.Context, spec *core.Spec, provide
 	for _, test := range spec.Tests.Kubernetes.Nodes {
 		result := executeKubernetesNodeTest(ctx, provider, test)
 		results = append(results, result)
+		if callback != nil {
+			callback(result)
+		}
 		if failFast && result.Status == core.StatusFail {
 			return results, true
 		}
@@ -76,6 +94,9 @@ func (p *KubernetesPlugin) Execute(ctx context.Context, spec *core.Spec, provide
 	for _, test := range spec.Tests.Kubernetes.CRDs {
 		result := executeKubernetesCRDTest(ctx, provider, test)
 		results = append(results, result)
+		if callback != nil {
+			callback(result)
+		}
 		if failFast && result.Status == core.StatusFail {
 			return results, true
 		}
@@ -85,6 +106,9 @@ func (p *KubernetesPlugin) Execute(ctx context.Context, spec *core.Spec, provide
 	for _, test := range spec.Tests.Kubernetes.Helm {
 		result := executeKubernetesHelmTest(ctx, provider, test)
 		results = append(results, result)
+		if callback != nil {
+			callback(result)
+		}
 		if failFast && result.Status == core.StatusFail {
 			return results, true
 		}
@@ -94,6 +118,9 @@ func (p *KubernetesPlugin) Execute(ctx context.Context, spec *core.Spec, provide
 	for _, test := range spec.Tests.Kubernetes.StorageClasses {
 		result := executeKubernetesStorageClassTest(ctx, provider, test)
 		results = append(results, result)
+		if callback != nil {
+			callback(result)
+		}
 		if failFast && result.Status == core.StatusFail {
 			return results, true
 		}
@@ -103,6 +130,9 @@ func (p *KubernetesPlugin) Execute(ctx context.Context, spec *core.Spec, provide
 	for _, test := range spec.Tests.Kubernetes.Secrets {
 		result := executeKubernetesSecretTest(ctx, provider, test)
 		results = append(results, result)
+		if callback != nil {
+			callback(result)
+		}
 		if failFast && result.Status == core.StatusFail {
 			return results, true
 		}
@@ -112,6 +142,9 @@ func (p *KubernetesPlugin) Execute(ctx context.Context, spec *core.Spec, provide
 	for _, test := range spec.Tests.Kubernetes.Ingress {
 		result := executeKubernetesIngressTest(ctx, provider, test)
 		results = append(results, result)
+		if callback != nil {
+			callback(result)
+		}
 		if failFast && result.Status == core.StatusFail {
 			return results, true
 		}
@@ -121,6 +154,9 @@ func (p *KubernetesPlugin) Execute(ctx context.Context, spec *core.Spec, provide
 	for _, test := range spec.Tests.Kubernetes.PVCs {
 		result := executeKubernetesPVCTest(ctx, provider, test)
 		results = append(results, result)
+		if callback != nil {
+			callback(result)
+		}
 		if failFast && result.Status == core.StatusFail {
 			return results, true
 		}
@@ -130,6 +166,9 @@ func (p *KubernetesPlugin) Execute(ctx context.Context, spec *core.Spec, provide
 	for _, test := range spec.Tests.Kubernetes.StatefulSets {
 		result := executeKubernetesStatefulSetTest(ctx, provider, test)
 		results = append(results, result)
+		if callback != nil {
+			callback(result)
+		}
 		if failFast && result.Status == core.StatusFail {
 			return results, true
 		}

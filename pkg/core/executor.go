@@ -6,11 +6,16 @@ import (
 	"time"
 )
 
+// ResultCallback is called after each test result is produced
+// This allows for real-time feedback as tests execute
+type ResultCallback func(result Result)
+
 // Executor executes tests against a provider
 type Executor struct {
 	spec     *Spec
 	provider Provider
 	plugins  []Plugin
+	callback ResultCallback
 }
 
 // Provider interface that all providers must implement
@@ -22,7 +27,8 @@ type Provider interface {
 type Plugin interface {
 	// Execute runs all tests handled by this plugin
 	// Returns results and a boolean indicating whether to stop (for fail-fast)
-	Execute(ctx context.Context, spec *Spec, provider Provider, failFast bool) ([]Result, bool)
+	// callback is called after each individual test completes (if provided)
+	Execute(ctx context.Context, spec *Spec, provider Provider, failFast bool, callback ResultCallback) ([]Result, bool)
 }
 
 // NewExecutor creates a new executor with the given plugins
@@ -31,7 +37,13 @@ func NewExecutor(spec *Spec, provider Provider, plugins ...Plugin) *Executor {
 		spec:     spec,
 		provider: provider,
 		plugins:  plugins,
+		callback: nil,
 	}
+}
+
+// SetResultCallback sets a callback to be called after each test result
+func (e *Executor) SetResultCallback(callback ResultCallback) {
+	e.callback = callback
 }
 
 // Execute runs all tests in the spec using registered plugins
@@ -46,7 +58,7 @@ func (e *Executor) Execute(ctx context.Context) (*TestResults, error) {
 
 	// Execute each plugin in order
 	for _, plugin := range e.plugins {
-		pluginResults, shouldStop := plugin.Execute(ctx, e.spec, e.provider, e.spec.Config.FailFast)
+		pluginResults, shouldStop := plugin.Execute(ctx, e.spec, e.provider, e.spec.Config.FailFast, e.callback)
 		results.Results = append(results.Results, pluginResults...)
 
 		// If plugin indicates we should stop (fail-fast), break
