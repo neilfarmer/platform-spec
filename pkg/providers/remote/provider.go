@@ -38,6 +38,7 @@ type Config struct {
 	JumpUser               string        // Jump host SSH user
 	JumpIdentityFile       string        // SSH private key for jump host (optional, defaults to IdentityFile)
 	RetryConfig            *retry.Config // Retry configuration (nil = no retries)
+	Verbose                bool          // Enable verbose output showing timing and commands
 }
 
 // ParseTarget parses a target string like "user@host" or "host"
@@ -78,6 +79,16 @@ func (p *Provider) Connect(ctx context.Context) error {
 
 // connectOnce performs a single connection attempt without retry logic
 func (p *Provider) connectOnce(ctx context.Context) error {
+	startTime := time.Now()
+	if p.config.Verbose {
+		target := fmt.Sprintf("%s@%s:%d", p.config.User, p.config.Host, p.config.Port)
+		if p.config.JumpHost != "" {
+			fmt.Printf("[%s] Connecting to %s via jump host %s\n", formatElapsed(0), target, p.config.JumpHost)
+		} else {
+			fmt.Printf("[%s] Connecting to %s\n", formatElapsed(0), target)
+		}
+	}
+
 	// Configure host key verification
 	hostKeyCallback, err := p.getHostKeyCallback()
 	if err != nil {
@@ -98,11 +109,14 @@ func (p *Provider) connectOnce(ctx context.Context) error {
 			return err
 		}
 
-		client, err := p.connectViaJumpHost(jumpAuthMethods, targetAuthMethods, hostKeyCallback)
+		client, err := p.connectViaJumpHost(jumpAuthMethods, targetAuthMethods, hostKeyCallback, startTime)
 		if err != nil {
 			return err
 		}
 		p.client = client
+		if p.config.Verbose {
+			fmt.Printf("[%s] Connected and authenticated (%.2fs)\n", formatElapsed(time.Since(startTime)), time.Since(startTime).Seconds())
+		}
 		return nil
 	}
 
@@ -128,6 +142,9 @@ func (p *Provider) connectOnce(ctx context.Context) error {
 	}
 
 	p.client = client
+	if p.config.Verbose {
+		fmt.Printf("[%s] Connected and authenticated (%.2fs)\n", formatElapsed(time.Since(startTime)), time.Since(startTime).Seconds())
+	}
 	return nil
 }
 
@@ -168,7 +185,7 @@ func (p *Provider) buildAuthMethods(identityFile string, hostType string) ([]ssh
 // connectViaJumpHost establishes an SSH connection through a jump host
 // jumpAuthMethods: authentication for the jump host
 // targetAuthMethods: authentication for the target host (can be different)
-func (p *Provider) connectViaJumpHost(jumpAuthMethods, targetAuthMethods []ssh.AuthMethod, hostKeyCallback ssh.HostKeyCallback) (*ssh.Client, error) {
+func (p *Provider) connectViaJumpHost(jumpAuthMethods, targetAuthMethods []ssh.AuthMethod, hostKeyCallback ssh.HostKeyCallback, startTime time.Time) (*ssh.Client, error) {
 	// First, connect to the jump host using jump host auth methods
 	jumpConfig := &ssh.ClientConfig{
 		User:            p.config.JumpUser,
@@ -183,6 +200,10 @@ func (p *Provider) connectViaJumpHost(jumpAuthMethods, targetAuthMethods []ssh.A
 	jumpClient, err := ssh.Dial("tcp", jumpAddr, jumpConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to jump host %s: %w", jumpAddr, err)
+	}
+
+	if p.config.Verbose {
+		fmt.Printf("[%s] Connected to jump host (%.2fs)\n", formatElapsed(time.Since(startTime)), time.Since(startTime).Seconds())
 	}
 
 	// Store the jump client so it can be closed later
@@ -213,6 +234,10 @@ func (p *Provider) connectViaJumpHost(jumpAuthMethods, targetAuthMethods []ssh.A
 		// #nosec G104 -- Already in error path, cleanup errors can be safely ignored
 		jumpClient.Close()
 		return nil, fmt.Errorf("failed to establish SSH connection to target %s: %w", targetAddr, err)
+	}
+
+	if p.config.Verbose {
+		fmt.Printf("[%s] Connected to target through jump host (%.2fs)\n", formatElapsed(time.Since(startTime)), time.Since(startTime).Seconds())
 	}
 
 	// Create the target client
@@ -268,6 +293,11 @@ func (p *Provider) ExecuteCommand(ctx context.Context, command string) (stdout, 
 
 // executeCommandOnce performs a single command execution attempt with automatic reconnection
 func (p *Provider) executeCommandOnce(ctx context.Context, command string) (stdout, stderr string, exitCode int, err error) {
+	startTime := time.Now()
+	if p.config.Verbose {
+		fmt.Printf("[%s] Executing: %s\n", formatElapsed(0), command)
+	}
+
 	session, err := p.client.NewSession()
 	if err != nil {
 		// Connection might be dead - try to reconnect once
@@ -299,6 +329,11 @@ func (p *Provider) executeCommandOnce(ctx context.Context, command string) (stdo
 		}
 	} else {
 		exitCode = 0
+	}
+
+	if p.config.Verbose {
+		elapsed := time.Since(startTime)
+		fmt.Printf("[%s] Command completed (%.2fs, exit code: %d)\n", formatElapsed(elapsed), elapsed.Seconds(), exitCode)
 	}
 
 	return stdout, stderr, exitCode, nil
@@ -410,4 +445,12 @@ func getHostnameFromConfig(configPath string, host string) string {
 	// ssh_config.Config.Get returns empty string if not found
 	hostname, _ := cfg.Get(host, "HostName")
 	return hostname
+}
+
+// formatElapsed formats a duration as MM:SS.SS for verbose output
+func formatElapsed(d time.Duration) string {
+	seconds := d.Seconds()
+	minutes := int(seconds / 60)
+	seconds = seconds - float64(minutes*60)
+	return fmt.Sprintf("%02d:%05.2f", minutes, seconds)
 }

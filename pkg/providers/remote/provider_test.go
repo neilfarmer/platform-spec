@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"testing"
+	"time"
 )
 
 func TestParseTarget(t *testing.T) {
@@ -457,4 +458,159 @@ func TestGetHostnameFromConfig(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNewProviderWithVerbose(t *testing.T) {
+	tests := []struct {
+		name        string
+		config      *Config
+		wantVerbose bool
+	}{
+		{
+			name: "verbose enabled",
+			config: &Config{
+				Host:    "localhost",
+				Port:    22,
+				User:    "testuser",
+				Verbose: true,
+			},
+			wantVerbose: true,
+		},
+		{
+			name: "verbose disabled",
+			config: &Config{
+				Host:    "localhost",
+				Port:    22,
+				User:    "testuser",
+				Verbose: false,
+			},
+			wantVerbose: false,
+		},
+		{
+			name: "verbose not set defaults to false",
+			config: &Config{
+				Host: "localhost",
+				Port: 22,
+				User: "testuser",
+			},
+			wantVerbose: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			provider := NewProvider(tt.config)
+
+			if provider == nil {
+				t.Fatal("NewProvider() returned nil")
+			}
+
+			if provider.config.Verbose != tt.wantVerbose {
+				t.Errorf("config.Verbose = %v, want %v", provider.config.Verbose, tt.wantVerbose)
+			}
+		})
+	}
+}
+
+func TestFormatElapsed(t *testing.T) {
+	tests := []struct {
+		name     string
+		duration string
+		want     string
+	}{
+		{
+			name:     "zero duration",
+			duration: "0s",
+			want:     "00:00.00",
+		},
+		{
+			name:     "less than one second",
+			duration: "500ms",
+			want:     "00:00.50",
+		},
+		{
+			name:     "exactly one second",
+			duration: "1s",
+			want:     "00:01.00",
+		},
+		{
+			name:     "multiple seconds",
+			duration: "45s",
+			want:     "00:45.00",
+		},
+		{
+			name:     "one minute",
+			duration: "1m",
+			want:     "01:00.00",
+		},
+		{
+			name:     "one minute and seconds",
+			duration: "1m30s",
+			want:     "01:30.00",
+		},
+		{
+			name:     "multiple minutes and seconds with milliseconds",
+			duration: "2m45s500ms",
+			want:     "02:45.50",
+		},
+		{
+			name:     "large duration",
+			duration: "10m15s",
+			want:     "10:15.00",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			duration, err := parseTestDuration(tt.duration)
+			if err != nil {
+				t.Fatalf("Failed to parse duration %q: %v", tt.duration, err)
+			}
+
+			got := formatElapsed(duration)
+			if got != tt.want {
+				t.Errorf("formatElapsed(%v) = %q, want %q", duration, got, tt.want)
+			}
+		})
+	}
+}
+
+// parseTestDuration parses a simple duration string for testing
+func parseTestDuration(s string) (time.Duration, error) {
+	var total time.Duration
+	var num int
+	var unit string
+
+	// Parse simple format like "1m30s" or "500ms"
+	for i := 0; i < len(s); i++ {
+		if s[i] >= '0' && s[i] <= '9' {
+			num = num*10 + int(s[i]-'0')
+		} else {
+			// Found a unit character
+			j := i
+			for j < len(s) && (s[j] < '0' || s[j] > '9') {
+				j++
+			}
+			unit = s[i:j]
+
+			var d time.Duration
+			switch unit {
+			case "m":
+				d = time.Duration(num) * time.Minute
+			case "s":
+				d = time.Duration(num) * time.Second
+			case "ms":
+				d = time.Duration(num) * time.Millisecond
+			default:
+				return 0, fmt.Errorf("unknown unit: %s", unit)
+			}
+
+			total += d
+			num = 0
+			unit = ""
+			i = j - 1
+		}
+	}
+
+	return total, nil
 }

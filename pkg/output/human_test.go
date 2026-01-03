@@ -1023,3 +1023,226 @@ func TestFormatMultiHostSummaryTable(t *testing.T) {
 		})
 	}
 }
+
+func TestApplyColorExport(t *testing.T) {
+	tests := []struct {
+		name     string
+		noColor  bool
+		color    string
+		text     string
+		wantText string
+	}{
+		{
+			name:     "colors enabled",
+			noColor:  false,
+			color:    colorGreen,
+			text:     "SUCCESS",
+			wantText: colorGreen + "SUCCESS" + colorReset,
+		},
+		{
+			name:     "colors disabled",
+			noColor:  true,
+			color:    colorRed,
+			text:     "ERROR",
+			wantText: "ERROR",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			originalNoColor := NoColor
+			defer func() { NoColor = originalNoColor }()
+
+			NoColor = tt.noColor
+			got := ApplyColorExport(tt.color, tt.text)
+			if got != tt.wantText {
+				t.Errorf("ApplyColorExport() = %q, want %q", got, tt.wantText)
+			}
+		})
+	}
+}
+
+func TestPadRight(t *testing.T) {
+	tests := []struct {
+		name  string
+		text  string
+		width int
+		want  string
+	}{
+		{
+			name:  "text shorter than width",
+			text:  "hello",
+			width: 10,
+			want:  "hello     ",
+		},
+		{
+			name:  "text equals width",
+			text:  "hello",
+			width: 5,
+			want:  "hello",
+		},
+		{
+			name:  "text longer than width",
+			text:  "hello world",
+			width: 5,
+			want:  "hello world",
+		},
+		{
+			name:  "text with ANSI codes shorter than width",
+			text:  "\033[32mPASS\033[0m",
+			width: 10,
+			want:  "\033[32mPASS\033[0m      ", // "PASS" is 4 chars, needs 6 spaces
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := padRight(tt.text, tt.width)
+			if got != tt.want {
+				t.Errorf("padRight(%q, %d) = %q, want %q", tt.text, tt.width, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFormatHostHeader(t *testing.T) {
+	tests := []struct {
+		name     string
+		target   string
+		noColor  bool
+		wantText string
+	}{
+		{
+			name:     "with colors",
+			target:   "web-01.example.com",
+			noColor:  false,
+			wantText: "\n" + colorBold + "web-01.example.com" + colorReset + ":",
+		},
+		{
+			name:     "without colors",
+			target:   "web-01.example.com",
+			noColor:  true,
+			wantText: "\nweb-01.example.com:",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			originalNoColor := NoColor
+			defer func() { NoColor = originalNoColor }()
+
+			NoColor = tt.noColor
+			got := FormatHostHeader(tt.target)
+			if got != tt.wantText {
+				t.Errorf("FormatHostHeader() = %q, want %q", got, tt.wantText)
+			}
+		})
+	}
+}
+
+func TestFormatConnectionError(t *testing.T) {
+	tests := []struct {
+		name         string
+		err          error
+		noColor      bool
+		wantContains []string
+	}{
+		{
+			name:    "with colors",
+			err:     fmt.Errorf("connection refused"),
+			noColor: false,
+			wantContains: []string{
+				"✗",
+				"Connection failed: connection refused",
+				colorRed,
+			},
+		},
+		{
+			name:    "without colors",
+			err:     fmt.Errorf("timeout"),
+			noColor: true,
+			wantContains: []string{
+				"✗",
+				"Connection failed: timeout",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			originalNoColor := NoColor
+			defer func() { NoColor = originalNoColor }()
+
+			NoColor = tt.noColor
+			got := FormatConnectionError(tt.err)
+
+			for _, want := range tt.wantContains {
+				if !strings.Contains(got, want) {
+					t.Errorf("FormatConnectionError() missing %q\nGot: %q", want, got)
+				}
+			}
+		})
+	}
+}
+
+func TestFormatHostSummary(t *testing.T) {
+	tests := []struct {
+		name         string
+		hostResults  *core.HostResults
+		wantContains []string
+	}{
+		{
+			name: "all tests passed",
+			hostResults: &core.HostResults{
+				Target:    "web-01.example.com",
+				Connected: true,
+				SpecResults: []*core.TestResults{
+					{
+						Results: []core.Result{
+							{Name: "Test 1", Status: core.StatusPass, Duration: 100 * time.Millisecond},
+							{Name: "Test 2", Status: core.StatusPass, Duration: 200 * time.Millisecond},
+						},
+					},
+				},
+				Duration: 500 * time.Millisecond,
+			},
+			wantContains: []string{
+				"2 passed",
+				"0.50s",
+			},
+		},
+		{
+			name: "mixed results",
+			hostResults: &core.HostResults{
+				Target:    "web-01.example.com",
+				Connected: true,
+				SpecResults: []*core.TestResults{
+					{
+						Results: []core.Result{
+							{Name: "Test 1", Status: core.StatusPass},
+							{Name: "Test 2", Status: core.StatusFail},
+							{Name: "Test 3", Status: core.StatusSkip},
+						},
+					},
+				},
+				Duration: 1 * time.Second,
+			},
+			wantContains: []string{
+				"1 passed, 1 failed",
+				"1.00s",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := FormatHostSummary(tt.hostResults)
+
+			for _, want := range tt.wantContains {
+				if !strings.Contains(got, want) {
+					t.Errorf("FormatHostSummary() missing %q\nGot:\n%s", want, got)
+				}
+			}
+		})
+	}
+}

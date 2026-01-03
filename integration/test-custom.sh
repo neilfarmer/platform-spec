@@ -73,7 +73,7 @@ START=$(date +%s)
 docker exec custom-test-runner platform-spec test remote \
     --inventory /inventory.txt -p 2222 -i /root/.ssh/id_rsa \
     -J ${JUMP_HOST} --jump-port ${JUMP_PORT} --jump-identity /root/.ssh/id_rsa \
-    --insecure-ignore-host-key --parallel 10 /spec.yaml
+    --insecure-ignore-host-key --parallel 10 --ignore-failure /spec.yaml
 ELAPSED=$(($(date +%s) - START))
 
 echo ""

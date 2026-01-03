@@ -447,6 +447,7 @@ func runRemoteTest(cmd *cobra.Command, args []string) {
 			JumpUser:              parsedJumpUser,
 			JumpIdentityFile:      jumpIdentityFile,
 			RetryConfig:           retryConfig,
+			Verbose:               verbose,
 		}
 
 		jobs = append(jobs, core.HostJob{
