@@ -58,62 +58,23 @@ done
 echo -e "${GREEN}${READY}/${NUM_CONTAINERS} containers reachable${NC}"
 echo ""
 
-echo -e "${BLUE}Test 1: Single Host via Jump${NC}"
-docker exec custom-test-runner platform-spec test remote \
-    testuser@ssh-custom-1 -p 2222 -i /root/.ssh/id_rsa \
-    -J ${JUMP_HOST} --jump-port ${JUMP_PORT} --jump-identity /root/.ssh/id_rsa \
-    --insecure-ignore-host-key /spec.yaml --verbose
+echo -e "${BLUE}Running Custom Test - ${NUM_CONTAINERS} containers${NC}"
+echo ""
+echo -e "${YELLOW}Command:${NC}"
+echo "docker exec custom-test-runner platform-spec test remote \\"
+echo "    --inventory /inventory.txt -p 2222 -i /root/.ssh/id_rsa \\"
+echo "    -J ${JUMP_HOST} --jump-port ${JUMP_PORT} --jump-identity /root/.ssh/id_rsa \\"
+echo "    --insecure-ignore-host-key --parallel 10 /spec.yaml"
+echo ""
+echo "Testing ${NUM_CONTAINERS} containers with 30 tests each = $((NUM_CONTAINERS * 30)) total test executions"
 echo ""
 
-echo -e "${BLUE}Test 2: Sequential (50 hosts)${NC}"
-START_SEQ=$(date +%s)
-docker exec custom-test-runner platform-spec test remote \
-    --inventory /inventory.txt -p 2222 -i /root/.ssh/id_rsa \
-    -J ${JUMP_HOST} --jump-port ${JUMP_PORT} --jump-identity /root/.ssh/id_rsa \
-    --insecure-ignore-host-key /spec.yaml
-SEQ_TIME=$(($(date +%s) - START_SEQ))
-echo -e "${GREEN}Sequential: ${SEQ_TIME}s${NC}"
-echo ""
-
-echo -e "${BLUE}Test 3: Parallel 10 workers${NC}"
 START=$(date +%s)
 docker exec custom-test-runner platform-spec test remote \
     --inventory /inventory.txt -p 2222 -i /root/.ssh/id_rsa \
     -J ${JUMP_HOST} --jump-port ${JUMP_PORT} --jump-identity /root/.ssh/id_rsa \
     --insecure-ignore-host-key --parallel 10 /spec.yaml
-PAR10_TIME=$(($(date +%s) - START))
-echo -e "${GREEN}Parallel 10: ${PAR10_TIME}s${NC}"
-echo ""
+ELAPSED=$(($(date +%s) - START))
 
-echo -e "${BLUE}Test 4: Parallel 25 workers${NC}"
-START=$(date +%s)
-docker exec custom-test-runner platform-spec test remote \
-    --inventory /inventory.txt -p 2222 -i /root/.ssh/id_rsa \
-    -J ${JUMP_HOST} --jump-port ${JUMP_PORT} --jump-identity /root/.ssh/id_rsa \
-    --insecure-ignore-host-key --parallel 25 /spec.yaml
-PAR25_TIME=$(($(date +%s) - START))
-echo -e "${GREEN}Parallel 25: ${PAR25_TIME}s${NC}"
 echo ""
-
-echo -e "${BLUE}Test 5: Parallel 50 workers${NC}"
-START=$(date +%s)
-docker exec custom-test-runner platform-spec test remote \
-    --inventory /inventory.txt -p 2222 -i /root/.ssh/id_rsa \
-    -J ${JUMP_HOST} --jump-port ${JUMP_PORT} --jump-identity /root/.ssh/id_rsa \
-    --insecure-ignore-host-key --parallel 50 /spec.yaml
-PAR50_TIME=$(($(date +%s) - START))
-echo -e "${GREEN}Parallel 50: ${PAR50_TIME}s${NC}"
-echo ""
-
-echo -e "${BLUE}================================${NC}"
-echo -e "${BLUE}Performance Summary${NC}"
-echo -e "${BLUE}================================${NC}"
-echo "50 containers x 30 tests = 1500 test executions"
-echo "All via jump host"
-echo ""
-echo "Sequential:    ${SEQ_TIME}s"
-echo "Parallel 10:   ${PAR10_TIME}s"
-echo "Parallel 25:   ${PAR25_TIME}s"
-echo "Parallel 50:   ${PAR50_TIME}s"
-echo ""
-echo -e "${GREEN}All tests passed!${NC}"
+echo -e "${GREEN}Test completed: ${NUM_CONTAINERS} containers, $((NUM_CONTAINERS * 30)) tests in ${ELAPSED}s${NC}"

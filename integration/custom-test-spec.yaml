@@ -7,7 +7,7 @@ metadata:
 tests:
   packages:
     - name: "bash package installed"
-      packages: [bash]
+      packages: [bassh]
       state: present
     - name: "curl package installed"
       packages: [curl]
@@ -30,7 +30,7 @@ tests:
       path: /etc
       type: directory
     - name: "/etc/passwd file exists"
-      path: /etc/passwd
+      path: /etc/passswd
       type: file
     - name: "/etc/group file exists"
       path: /etc/group
@@ -59,7 +59,7 @@ tests:
       shell: /bin/sh
     - name: "testuser has shell"
       user: testuser
-      shell: /bin/bash
+      shell: /bin/bassh
 
   groups:
     - name: "root group exists"
@@ -67,14 +67,14 @@ tests:
     - name: "users group exists"
       groups: [users]
     - name: "wheel group exists"
-      groups: [wheel]
+      groups: [whesel]
 
   file_content:
     - name: "/etc/passwd contains root"
       path: /etc/passwd
       contains: ["root"]
     - name: "/etc/os-release contains Alpine"
-      path: /etc/os-release
+      path: /etc/os-relsease
       contains: ["Alpine"]
     - name: "/etc/group contains root"
       path: /etc/group
